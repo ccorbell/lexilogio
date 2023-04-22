@@ -11,4 +11,4 @@ Entries may be imported from text files. Exports and merges are TBD. GUI also TB
 More documentation forthcoming! This should be considered unstable at present, some database 
 schema revisions are planned in upcoming commits.
 
-License: *GPL-3.0-or-later*
+License: **GPL-3.0-or-later**
