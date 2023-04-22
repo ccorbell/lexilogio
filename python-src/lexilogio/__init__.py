@@ -6,4 +6,5 @@ Created on Sat Apr  8 23:41:36 2023
 @author: mathaes
 """
 
-__all__ = ['deck', 'deckdatabase', 'drill', 'term', 'textdrillrunner']
+
+__all__ = ["deck", "deckdatabase", "drill", "term", "textdrillrunner"]

@@ -6,8 +6,8 @@ Created on Sat Apr  8 23:41:57 2023
 @author: mathaes
 """
 
+
 class Term:
-    
     def __init__(self):
         self.pkey = -1
         self.question = None
@@ -18,7 +18,7 @@ class Term:
         self.tags = None
         self.lastDrillTime = None
         self.updated = False
-        
+
     def getTagStr(self):
         tagstr = ""
         if not None == self.tags and len(self.tags) > 0:
@@ -27,7 +27,3 @@ class Term:
             else:
                 tagstr = ",".join(self.tags)
         return tagstr
-        
-        
-        
-    
