@@ -181,9 +181,7 @@ class DeckDatabase:
         cur = con.cursor()
         
         for term in termList:
-            tagStr = ""
-            if None != term.tags and len(term.tags) > 0:
-                tagStr = ','.join(term.tags)
+            tagStr = term.getTagStr()
                 
             termParams = [(term.question), 
                           (term.answer),
@@ -199,18 +197,20 @@ class DeckDatabase:
     def updateTerms(self, deck: Deck, termList:list):
         self.ensureDeckTablesExist(deck)
         
-        timeSetter = ""
-        if not None == term.lastDrillTime:
-            timeSetter = ", last_drill_time = ?"
-            
-        updateSql = f""""UDPATE {DECK_TABLE_NAME} 
-SET question = ?, answer = ?, category = ?, bin = ?, reversed_bin = ?, tags = ? {timeSetter}
-WHERE pkey = ?;
-"""
+        
         con = self.getDbConnection()
         cur = con.cursor()
         
         for term in termList:
+            timeSetter = ""
+        if not None == term.lastDrillTime:
+            timeSetter = ", last_drill_time = ?"
+            
+            updateSql = f""""UDPATE {DECK_TABLE_NAME} 
+SET question = ?, answer = ?, category = ?, bin = ?, reversed_bin = ?, tags = ? {timeSetter}
+WHERE pkey = ?;
+"""
+
             tagStr = ""
             if len(term.tags) > 0:
                 tagStr = ','.join(term.tags)
@@ -266,7 +266,19 @@ WHERE pkey = ?;
             cur.execute(updateSql, params)
         
         con.commit()
-    
+        
+    def updateTermTags(self, deck: Deck, termList:list):
+        updateTagSql = f"UPDATE {DECK_TABLE_NAME} SET tags = ? WHERE pkey = ?;"
+        
+        con = self.getDbConnection()
+        cur = con.cursor()
+        
+        for term in termList:
+            params = [(term.getTagStr()), (term.pkey),]
+            cur.execute(updateTagSql, params)
+        
+        con.commit()
+            
     def getDeckCategories(self, deck: Deck):
         self.ensureDeckTablesExist(deck)
       
@@ -294,9 +306,27 @@ WHERE pkey = ?;
         
         deck.categories.append(category)
         
+    def deleteDeckCategory(self, deck:Deck, category):
+        self.ensureDeckTablesExist(deck)
+
+        # first clear the category from any assigned entries
+        updateSQL = f"UPDATE {CATEGORY_TABLE_NAME} SET category = NULL WHERE category = ?;"
+        deleteSql = f"DELETE FROM {CATEGORY_TABLE_NAME} WHERE category = ?;"
         
+        
+        con = self.getDbConnection()
+        cur = con.cursor()
+        
+        cur.execute(updateSQL, [(category),])
+        cur.execute(deleteSql, [(category),])
+        con.commit()
+        
+        if category in deck.categories:
+            deck.categories.remove(category)
+            
     def getDeckTags(self, deck: Deck):
         self.ensureDeckTablesExist(deck)
+
 
         querySql = f"SELECT tag FROM {TAG_TABLE_NAME};"
         
@@ -319,7 +349,35 @@ WHERE pkey = ?;
         
         cur.execute(querySql, [(tag),])
         con.commit()
+        
+        if not tag in deck.tags:
+            deck.tags.append(tag)
     
+    def deleteDeckTag(self, deck:Deck, tag):
+        self.ensureDeckTablesExist(deck)
+        
+        taggedTerms = self.queryForDeckTerms(deck=deck, tags=[tag])
+        updateTerms = []
+        for term in taggedTerms:
+            if tag in term.tags:
+                term.tags.remove(tag)
+                updateTerms.append(term)
+                
+        if len(updateTerms) > 0:
+            self.updateTermTags(deck, updateTerms)
+        
+        querySql = f"DELETE FROM {TAG_TABLE_NAME} WHERE tag = ?;"
+        
+        con = self.getDbConnection()
+        cur = con.cursor()
+        
+        cur.execute(querySql, [(tag),])
+        con.commit()
+        
+        if tag in deck.tags:
+            deck.tags.remove(tag)
+        
+        
     def readDeckPreferences(self, deck:Deck):
         self.ensureDeckTablesExist(deck)
         
@@ -400,7 +458,7 @@ WHERE pkey = ?;
     pkey INTEGER PRIMARY KEY,
     question TEXT NOT NULL,
     answer TEXT NOT NULL,
-    category TEXT NOT NULL,
+    category INT NULL,
     bin INTEGER DEFAULT 0 NOT NULL,
     reversed_bin INTEGER DEFAULT 0 NOT NULL,
     tags TEXT DEFAULT "" NOT NULL,

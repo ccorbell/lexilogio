@@ -97,7 +97,7 @@ class TextDrillRunner:
         elif self.inputMode == INPUT_MODE_add:
             self.run_add()
         elif self.inputMode == INPUT_MODE_preferences:
-            self.run_prefs()
+            self.τ()
         
     def run_mainmenu_input(self):
         print("\nlegilogio")
@@ -120,11 +120,16 @@ class TextDrillRunner:
             self.run_add()
         elif choice == 'p':
             self.inputMode = INPUT_MODE_preferences
-            self.run_prefs()
+            self.run_prefs() # has its own input loop
+            self.inputMode = INPUT_MODE_mainmenu
         elif choice == 'c':
-            print("category editor not yet implemented...")
+            self.inputMode = INPUT_MODE_categories
+            self.run_categories_edit() # has its own input loop
+            self.inputMode = INPUT_MODE_mainmenu
         elif choice == 't':
-            print("tags editor not yet implemented...")
+            self.inputMode = INPUT_MODE_tags
+            self.run_tags_edit() # has its own input loop
+            self.inputMode = INPUT_MODE_mainmenu
         elif choice == 'x':
             sys.exit(0)
         else:
@@ -266,10 +271,6 @@ class TextDrillRunner:
                 if yn.startswith('y'):
                     self.deck.prefs[Deck.PREFSKEY_REVERSED_DRILL] = toggleReversedPref
                     self.database.writeDeckPreferences(self.deck)       
-                    
-                
-        self.inputMode = INPUT_MODE_mainmenu
-            
         
         
     def run_add(self):
@@ -431,6 +432,114 @@ class TextDrillRunner:
             self.prepare_and_run_drill()
         elif choice == 'i':
             pass
+        
+    def run_tags_edit(self):
+        
+        exitTagEditor = False
+        
+        while not exitTagEditor:
+            currentTags = self.database.getDeckTags(self.deck)
+            currentTags.sort()
+        
+            print ("\nEdit tags list. Tags must have no spaces and are case-insensitive.\nCurrent tags:")
+            if len(currentTags) == 0:
+                print ("  None")
+            else:
+                for curTag in currentTags:
+                    print(f"  {curTag}")
+                    
+            print("\ncommands: add (tag-name), delete (tag-name), x (exit)")
+            commandInput = input(": ")
+            
+            commandParts = commandInput.lower().split(' ')
+            command = commandParts[0].strip()
+            if command == 'x':
+                exitTagEditor = True
+                break
+            elif command == 'add':
+                if len(commandParts) < 2:
+                    print("ERROR: add command should be followed by new tag name.")
+                else:
+                    tagName = commandParts[1].strip()
+                    if tagName in currentTags:
+                        print(f"ERROR: tag \"{tagName}\" already exists.")
+                    else:
+                        print(f"Creating tag \"{tagName}\"...")
+                        self.database.insertDeckTag(self.deck, tagName)
+            elif command == 'delete':
+                if len(commandParts) < 2:
+                    print("ERROR: delete command should be followed name of tag to delete.")
+                else:
+                    tagName = commandParts[1].strip()
+                    if not tagName in currentTags:
+                        print(f"WARNING: tag \"{tagName}\" not found, nothing to delete.")
+                    else:
+                        print(f"Deleting tag \"{tagName}\"...")
+                        self.database.deleteDeckTag(self.deck, tagName)
+                        print("WARNING: delete not currently clearing tag assignments.")
+                        
+        # note, we don't currently change input mode here in case
+        # we are editing tags in the midst of a drill
+    
+    def run_categories_edit(self):
+        exitCatEditor = False
+        
+        while not exitCatEditor:
+            currentCats = self.database.getDeckCategories(self.deck)
+            currentCats.sort()
+        
+            print ("\nEdit categories list.\nCurrent categories:")
+            if len(currentCats) == 0:
+                print ("  None")
+            else:
+                for curCat in currentCats:
+                    print(f"  {curCat}")
+                    
+            print("\ncommands:\n  add (category-name), delete (category-name), count (category-name), x (exit)")
+            commandInput = input(": ")
+            
+            commandParts = commandInput.lower().split(' ')
+            command = commandParts[0].strip()
+            if command == 'x':
+                exitCatEditor = True
+                break
+            elif command == 'add':
+                if len(commandParts) < 2:
+                    print("ERROR: add command should be followed by new category name.")
+                else:
+                    catName = commandParts[1].strip()
+                    if catName in currentCats:
+                        print(f"ERROR: category \"{catName}\" already exists.")
+                    else:
+                        print(f"Creating category \"{catName}\"...")
+                        self.database.insertDeckCategory(self.deck, catName)
+            elif command == 'delete':
+                if len(commandParts) < 2:
+                    print("ERROR: delete command should be followed name of category to delete.")
+                else:
+                    catName = commandParts[1].strip()
+                    if not catName in currentCats:
+                        print(f"WARNING: category \"{catName}\" not found, nothing to delete.")
+                    else:
+                        print(f"Deleting category \"{catName}\"...")
+                        self.database.deleteDeckCategory(self.deck, catName)
+                        print("WARNING: delete not currently clearing tag assignments.")
+            elif command == 'count':
+                catsToCount = currentCats
+                if len(commandParts) >= 2:
+                    catsToCount = []
+                    for n in range(1, len(commandParts)):
+                        catsToCount.append( (commandParts[n]) )
+                catsToCount.sort()
+                print("===============================")
+                print("term counts per category")
+                for cat in catsToCount:
+                    catCount = len(self.deck.getTermsInCategory(cat))
+                    print(f"  {cat}: {catCount}")
+                print("===============================")        
+                        
+        # note, we don't currently change input mode here in case
+        # we are editing tags in the midst of a drill
         
         
     def main(argv):
