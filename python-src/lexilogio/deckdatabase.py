@@ -8,14 +8,27 @@ Created on Sun Apr  9 00:01:09 2023
 
 from .deck import Deck
 from .term import Term
+from .tag import Tag
+from .category import Category
 
 import sqlite3
 from datetime import datetime
 
 
-DECK_TABLE_NAME = "deck_terms"
+DECK_TERMS_TABLE_NAME = "deck_terms"
+DECK_TERMS_COLUMN_NAMES = [
+    'pkey',
+    'question',
+    'answer',
+    'category', 
+    'bin',
+    'reversed_bin',
+    'last_drill_time'
+]
+
 CATEGORY_TABLE_NAME = "deck_categories"
 TAG_TABLE_NAME = "deck_tags"
+TAG_RELATION_TABLE_NAME = "deck_terms_tags_rel"
 PREFS_TABLE_NAME = "deck_prefs"
 
 INSERT_DEFAULT_PREFS_SQL = f"""INSERT INTO {PREFS_TABLE_NAME} (
@@ -40,17 +53,24 @@ class DeckDatabase:
 
     def loadDeck(self, deckName):
         deck = Deck(deckName)
+        
         self.ensureDeckTablesExist(deck)
+        
         deck.terms = self.queryForAllDeckTerms(deck)
         deck.categories = self.getDeckCategories(deck)
         deck.tags = self.getDeckTags(deck)
+        
+        termToTags, tagToTerms = self.getDeckTermTagRelations(deck)
+        deck.termToTags = termToTags
+        deck.tagToTerms = tagToTerms
+        
         self.readDeckPreferences(deck)
         return deck
 
     def queryForAllDeckTerms(self, deck: Deck):
         self.ensureDeckTablesExist(deck)
 
-        SELECT_SQL = f"SELECT * FROM {DECK_TABLE_NAME}"
+        SELECT_SQL = f"SELECT * FROM {DECK_TERMS_TABLE_NAME}"
 
         con = self.getDbConnection()
         cur = con.cursor()
@@ -62,9 +82,8 @@ class DeckDatabase:
     def queryForDeckTerms(
         self,
         deck: Deck,
-        category: str = None,
-        binValues: list = None,
-        tags: list = None,
+        category: Category = None,
+        binValues: list = None
     ):
         self.ensureDeckTablesExist(deck)
 
@@ -72,8 +91,6 @@ class DeckDatabase:
         if None != category:
             whereClauseCount += 1
         if None != binValues and len(binValues) > 0:
-            whereClauseCount += 1
-        if None != tags and len(tags) > 0:
             whereClauseCount += 1
 
         if 0 == whereClauseCount:
@@ -85,12 +102,9 @@ class DeckDatabase:
         binWhereClauseSql = None
         binParams = []
 
-        tagsWhereClauseSql = None
-        tagParams = []
-
         if not None == category:
             catWhereClauseSql = "category = ?"
-            catParams.append(category)
+            catParams.append(category.pkey)
 
         # TODO add isReversed para, support reversed bin query here
         if not None == binValues and len(binValues) > 0:
@@ -99,15 +113,8 @@ class DeckDatabase:
                 binWhereClauseSql += " OR bin = ?"
             binParams = binValues
 
-        if not None == tags and len(tags) > 0:
-            tagsWhereClauseSql = ""
-            for n in range(0, len(tags)):
-                if n > 0:
-                    tagsWhereClauseSql += " OR "
-                tagsWhereClauseSql += "tags LIKE ?"
-                tagParams.append(("%" + tags[n] + "%"))
-
-        querySQL = f"SELECT * FROM {DECK_TABLE_NAME} WHERE "
+        columnNamesCommaStr = ",".join(DECK_TERMS_COLUMN_NAMES)
+        querySQL = f"SELECT {columnNamesCommaStr} FROM {DECK_TERMS_TABLE_NAME} WHERE "
 
         if whereClauseCount > 1:
             querySQL += "("
@@ -117,7 +124,7 @@ class DeckDatabase:
 
         if catWhereClauseSql:
             querySQL += catWhereClauseSql
-            queryParams.exrend(catParams)
+            queryParams.extend(catParams)
             clauseIndex += 1
 
         if binWhereClauseSql:
@@ -126,12 +133,6 @@ class DeckDatabase:
             querySQL += binWhereClauseSql
             queryParams.extend(binParams)
             clauseIndex += 1
-
-        if tagsWhereClauseSql:
-            if clauseIndex > 0:
-                querySQL += ") AND ("
-            querySQL += tagsWhereClauseSql
-            queryParams.extend(tagParams)
 
         if whereClauseCount > 1:
             querySQL += ")"
@@ -149,7 +150,7 @@ class DeckDatabase:
     def queryResultsToTermArray(results):
         terms = []
         for row in results:
-            if not len(row) == 8:
+            if not len(row) == len(DECK_TERMS_COLUMN_NAMES):
                 raise Exception(f"Unexpected row results for Term object: {row}")
 
             term = Term()
@@ -160,8 +161,7 @@ class DeckDatabase:
             term.category = row[3]
             term.bin = int(row[4])
             term.reversedBin = int(row[5])
-            term.tags = str(row[6]).split(",")
-            term.lastDrillTime = row[7]
+            term.lastDrillTime = row[6]
 
             terms.append(term)
 
@@ -175,7 +175,7 @@ class DeckDatabase:
         # preserving drill time a new method will be required, esp. if we
         # want to use last_drill_time to reconcile any conflicts.
 
-        insertSQL = f"""INSERT INTO {DECK_TABLE_NAME} (question, answer, category, bin, reversed_bin, tags) 
+        insertSQL = f"""INSERT INTO {DECK_TERMS_TABLE_NAME} (question, answer, category, bin, reversed_bin, tags) 
     VALUES (?, ?, ?, ?, ?, ?);
 """
 
@@ -209,7 +209,7 @@ class DeckDatabase:
         if not None == term.lastDrillTime:
             timeSetter = ", last_drill_time = ?"
 
-            updateSql = f""""UDPATE {DECK_TABLE_NAME} 
+            updateSql = f""""UDPATE {DECK_TERMS_TABLE_NAME} 
 SET question = ?, answer = ?, category = ?, bin = ?, reversed_bin = ?, tags = ? {timeSetter}
 WHERE pkey = ?;
 """
@@ -239,11 +239,10 @@ WHERE pkey = ?;
     def updateTermBins(self, deck: Deck, termList: list, isReversedDrill=False):
         self.ensureDeckTablesExist(deck)
 
-        UPDATE_BIN_SQL = (
-            f"UPDATE {DECK_TABLE_NAME} SET bin = ?, last_drill_time = ? WHERE pkey = ?;"
-        )
+        UPDATE_BIN_SQL = f"UPDATE {DECK_TERMS_TABLE_NAME} SET bin = ?, last_drill_time = ? WHERE pkey = ?;"
 
-        UPDATE_REVERSED_BIN_SQL = f"UPDATE {DECK_TABLE_NAME} SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"
+        UPDATE_REVERSED_BIN_SQL = f"""UPDATE {DECK_TERMS_TABLE_NAME} 
+SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
 
         updateSql = UPDATE_BIN_SQL
         if isReversedDrill:
@@ -274,25 +273,10 @@ WHERE pkey = ?;
 
         con.commit()
 
-    def updateTermTags(self, deck: Deck, termList: list):
-        updateTagSql = f"UPDATE {DECK_TABLE_NAME} SET tags = ? WHERE pkey = ?;"
-
-        con = self.getDbConnection()
-        cur = con.cursor()
-
-        for term in termList:
-            params = [
-                (term.getTagStr()),
-                (term.pkey),
-            ]
-            cur.execute(updateTagSql, params)
-
-        con.commit()
-
     def getDeckCategories(self, deck: Deck):
         self.ensureDeckTablesExist(deck)
 
-        querySql = f"SELECT category FROM {CATEGORY_TABLE_NAME};"
+        querySql = f"SELECT pkey, category FROM {CATEGORY_TABLE_NAME};"
 
         con = self.getDbConnection()
         cur = con.cursor()
@@ -300,10 +284,16 @@ WHERE pkey = ?;
         cur.execute(querySql)
         rows = cur.fetchall()
 
-        categories = [cat[0] for cat in rows if len(cat) > 0]
+        categories = []
+        for catRow in rows:
+            catPK = int(catRow[0])
+            catName = str(catRow[1])
+            cat = Category(name=catName, pkey=catPK)
+            categories.append(cat)
+
         return categories
 
-    def insertDeckCategory(self, deck: Deck, category):
+    def insertDeckCategory(self, deck: Deck, categoryName):
         self.ensureDeckTablesExist(deck)
 
         querySql = f"INSERT INTO {CATEGORY_TABLE_NAME} (category) VALUES (?);"
@@ -314,12 +304,15 @@ WHERE pkey = ?;
         cur.execute(
             querySql,
             [
-                (category),
+                (categoryName),
             ],
         )
+        newCatPK = cur.lastrowid
+        
         con.commit()
 
-        deck.categories.append(category)
+        newCat = Category(name=categoryName, pkey=newCatPK)
+        return newCat
 
     def deleteDeckCategory(self, deck: Deck, category):
         self.ensureDeckTablesExist(deck)
@@ -353,7 +346,7 @@ WHERE pkey = ?;
     def getDeckTags(self, deck: Deck):
         self.ensureDeckTablesExist(deck)
 
-        querySql = f"SELECT tag FROM {TAG_TABLE_NAME};"
+        querySql = f"SELECT pkey, tag FROM {TAG_TABLE_NAME};"
 
         con = self.getDbConnection()
         cur = con.cursor()
@@ -361,56 +354,105 @@ WHERE pkey = ?;
         cur.execute(querySql)
         rows = cur.fetchall()
 
-        tags = [tag[0] for tag in rows if len(tag) > 0]
+        tags = []
+        for tagRow in rows:
+            tagPK = int(tagRow[0])
+            tagName = str(tagRow[1])
+            tag = Tag(name=tagName, pkey=tagPK)
+            tags.append(tag)
+
         return tags
 
-    def insertDeckTag(self, deck: Deck, tag):
+    def getDeckTermTagRelations(self, deck: Deck):
+        querySql = f"SELECT term, tag FROM {TAG_RELATION_TABLE_NAME};"
+        
+        con = self.getDbConnection()
+        cur = con.cursor()
+
+        cur.execute(querySql)
+        rows = cur.fetchall()
+        
+        termToTags = {}
+        tagToTerms = {}
+        
+        for relRow in rows:
+            termPK = relRow[0]
+            tagPK = relRow[1]
+            
+            if termPK in termToTags:
+                termToTags[termPK].append(tagPK)
+            else:
+                termToTags[termPK] = [tagPK]
+                
+            if tagPK in tagToTerms:
+                tagToTerms[tagPK].append(termPK)
+            else:
+                tagToTerms[tagPK] = [termPK]
+
+        return (termToTags, tagToTerms)
+        
+    def applyTagToTerm(self, deck: Deck, term: Term, tag: Tag):
+        if None == term.pkey or None == tag.pkey:
+            raise Exception("applyTagToTerm needs objects with database primary keys set.")
+            
+        insertSQL = f"INSERT INTO {TAG_RELATION_TABLE_NAME} (term, tag) VALUES (?, ?);"
+        params = [(term.pkey), (tag.pkey),]
+        
+        con = self.getDbConnection()
+        cur = con.cursor()
+        
+        cur.execute(insertSQL, params)
+        con.commit()
+        
+        if term.pkey in deck.termToTags:
+            deck.termToTags[term.pkey].append(tag.pkey)
+        else:
+            deck.termToTags[term.pkey] = [tag.pkey]
+            
+        if tag.pkey in deck.tagToTerms:
+            deck.tagToTerms[tag.pkey].append(term.pkey)
+        else:
+            deck.tagToTerms[tag.pkey] = [term.pkey]
+            
+    def insertDeckTag(self, deck: Deck, tag_name):
         self.ensureDeckTablesExist(deck)
 
+        newTag = Tag(name=tag_name)
+        
         querySql = f"INSERT INTO {TAG_TABLE_NAME} (tag) VALUES (?);"
 
         con = self.getDbConnection()
         cur = con.cursor()
 
-        cur.execute(
-            querySql,
-            [
-                (tag),
-            ],
-        )
+        cur.execute(querySql, [tag_name])
+        
+        newTag.pkey = int(cur.lastrowid)
+        
         con.commit()
 
-        if not tag in deck.tags:
-            deck.tags.append(tag)
+        deck.tags.append(newTag)
+        
+        return newTag
 
-    def deleteDeckTag(self, deck: Deck, tag):
+    def deleteDeckTag(self, deck: Deck, tag:Tag):
         self.ensureDeckTablesExist(deck)
 
-        taggedTerms = self.queryForDeckTerms(deck=deck, tags=[tag])
-        updateTerms = []
-        for term in taggedTerms:
-            if tag in term.tags:
-                term.tags.remove(tag)
-                updateTerms.append(term)
-
-        if len(updateTerms) > 0:
-            self.updateTermTags(deck, updateTerms)
-
-        querySql = f"DELETE FROM {TAG_TABLE_NAME} WHERE tag = ?;"
+        if None == tag.pkey:
+            raise Exception("Tag object missing pkey value.")
+            
+        # first delete the relations
+        deleteTagRelationSQL = f"DELETE FROM {TAG_RELATION_TABLE_NAME} WHERE tag = ?;"
+        deleteTagSQL = f"DELETE FROM {TAG_TABLE_NAME} WHERE pkey = ?;"
 
         con = self.getDbConnection()
         cur = con.cursor()
-
-        cur.execute(
-            querySql,
-            [
-                (tag),
-            ],
-        )
+        
+        cur.execute(deleteTagRelationSQL, [tag.pkey])
+        cur.execute(deleteTagSQL, [tag.pkey])
         con.commit()
 
-        if tag in deck.tags:
-            deck.tags.remove(tag)
+        # note, caller should reload deck
+        
 
     def readDeckPreferences(self, deck: Deck):
         self.ensureDeckTablesExist(deck)
@@ -492,24 +534,11 @@ WHERE pkey = ?;
         names = [r[0] for r in nameRows if len(r) > 0]
         # print(f"DEBUG - sqlite_master table names: {names}")
 
-        return DECK_TABLE_NAME in names
+        return DECK_TERMS_TABLE_NAME in names
 
     def createDeckTables(self, deck: Deck):
-
-        CREATE_SQL_terms = f"""CREATE TABLE IF NOT EXISTS {DECK_TABLE_NAME} (
-    pkey INTEGER PRIMARY KEY,
-    question TEXT NOT NULL,
-    answer TEXT NOT NULL,
-    category INT NULL,
-    bin INTEGER DEFAULT 0 NOT NULL,
-    reversed_bin INTEGER DEFAULT 0 NOT NULL,
-    tags TEXT DEFAULT "" NOT NULL,
-    last_drill_time TEXT DEFAULT NULL
-);
-"""
         con = self.getDbConnection()
         cur = con.cursor()
-        cur.execute(CREATE_SQL_terms)
 
         CREATE_SQL_categories = f"""CREATE TABLE IF NOT EXISTS {CATEGORY_TABLE_NAME} (
     pkey INTEGER PRIMARY KEY,
@@ -524,6 +553,30 @@ WHERE pkey = ?;
 );
 """
         cur.execute(CREATE_SQL_tags)
+
+        CREATE_SQL_terms = f"""CREATE TABLE IF NOT EXISTS {DECK_TERMS_TABLE_NAME} (
+    pkey INTEGER PRIMARY KEY,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    category INT NULL,
+    bin INTEGER DEFAULT 0 NOT NULL,
+    reversed_bin INTEGER DEFAULT 0 NOT NULL,
+    last_drill_time TEXT DEFAULT NULL,
+    FOREIGN KEY(category) REFERENCES {CATEGORY_TABLE_NAME}(pkey)
+);
+"""
+
+        cur.execute(CREATE_SQL_terms)
+
+        CREATE_SQL_tagrelation = f"""CREATE TABLE IF NOT EXISTS {TAG_RELATION_TABLE_NAME} (
+    pkey INTEGER PRIMARY KEY,
+    term INTEGER NOT NULL,
+    tag INTEGER NOT NULL,
+    FOREIGN KEY(term) REFERENCES {DECK_TERMS_TABLE_NAME}(pkey),
+    FOREIGN KEY(tag) REFERENCES {TAG_TABLE_NAME}(pkey)
+);
+"""
+        cur.execute(CREATE_SQL_tagrelation)
 
         CREATE_SQL_prefs = f"""CREATE TABLE IF NOT EXISTS {PREFS_TABLE_NAME} (
     pkey INTEGER PRIMARY KEY,

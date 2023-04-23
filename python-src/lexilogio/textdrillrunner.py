@@ -143,10 +143,10 @@ class TextDrillRunner:
 
         drillCatD = {}
         n = 0
-        for catName in self.deck.categories:
+        for catObj in self.deck.categories:
             catKey = string.ascii_lowercase[n]
-            drillCatD[catKey] = catName
-            categoryMenu += f"  ({catKey}) {catName}\n"
+            drillCatD[catKey] = catObj
+            categoryMenu += f"  ({catKey}) {catObj.name}\n"
             n = n + 1
 
         chosenKey = None
@@ -460,10 +460,15 @@ class TextDrillRunner:
     def run_tags_edit(self):
 
         exitTagEditor = False
-
+        
+        def tagNameSort(tag):
+            return tag.name
+            
         while not exitTagEditor:
+            
+            
             currentTags = self.database.getDeckTags(self.deck)
-            currentTags.sort()
+            currentTags.sort(key=tagNameSort)
 
             print(
                 "\nEdit tags list. Tags must have no spaces and are case-insensitive.\nCurrent tags:"
@@ -472,7 +477,7 @@ class TextDrillRunner:
                 print("  None")
             else:
                 for curTag in currentTags:
-                    print(f"  {curTag}")
+                    print(f"  {curTag.name}")
 
             print("\ncommands: add (tag-name), delete (tag-name), x (exit)")
             commandInput = input(": ")
@@ -491,7 +496,8 @@ class TextDrillRunner:
                         print(f'ERROR: tag "{tagName}" already exists.')
                     else:
                         print(f'Creating tag "{tagName}"...')
-                        self.database.insertDeckTag(self.deck, tagName)
+                        newTag = self.database.insertDeckTag(self.deck, tagName)
+                        self.deck.tags.append(newTag)
             elif command == "delete":
                 if len(commandParts) < 2:
                     print(
@@ -499,12 +505,16 @@ class TextDrillRunner:
                     )
                 else:
                     tagName = commandParts[1].strip()
-                    if not tagName in currentTags:
+                    delTagObj = None
+                    for tagObj in currentTags:
+                        if tagObj.name.lower() == tagName.lower():
+                            delTagObj = tagObj
+
+                    if None == delTagObj:
                         print(f'WARNING: tag "{tagName}" not found, nothing to delete.')
                     else:
-                        print(f'Deleting tag "{tagName}"...')
-                        self.database.deleteDeckTag(self.deck, tagName)
-                        print("WARNING: delete not currently clearing tag assignments.")
+                        print(f'Deleting tag "{delTagObj.name}"...')
+                        self.database.deleteDeckTag(self.deck, delTagObj)
 
         # note, we don't currently change input mode here in case
         # we are editing tags in the midst of a drill
@@ -512,16 +522,20 @@ class TextDrillRunner:
     def run_categories_edit(self):
         exitCatEditor = False
 
+        def catNameSort(catObj):
+            return catObj.name        
+
         while not exitCatEditor:
+
             currentCats = self.database.getDeckCategories(self.deck)
-            currentCats.sort()
+            currentCats.sort(key=catNameSort)
 
             print("\nEdit categories list.\nCurrent categories:")
             if len(currentCats) == 0:
                 print("  None")
             else:
                 for curCat in currentCats:
-                    print(f"  {curCat}")
+                    print(f"  {curCat.name}")
 
             print(
                 "\ncommands:\n  add (category-name), delete (category-name), count (category-name), x (exit)"
@@ -542,7 +556,9 @@ class TextDrillRunner:
                         print(f'ERROR: category "{catName}" already exists.')
                     else:
                         print(f'Creating category "{catName}"...')
-                        self.database.insertDeckCategory(self.deck, catName)
+                        newCat = self.database.insertDeckCategory(self.deck, catName)
+                        self.deck.categories.append(newCat)
+                        
             elif command == "delete":
                 if len(commandParts) < 2:
                     print(
@@ -550,26 +566,37 @@ class TextDrillRunner:
                     )
                 else:
                     catName = commandParts[1].strip()
-                    if not catName in currentCats:
+                    delCatObj = None
+                    for catObj in currentCats:
+                        if catObj.name == catName:
+                            delCatObj = catObj
+                            break
+                        
+                    if None == delCatObj:
                         print(
                             f'WARNING: category "{catName}" not found, nothing to delete.'
                         )
                     else:
                         print(f'Deleting category "{catName}"...')
-                        self.database.deleteDeckCategory(self.deck, catName)
-                        print("WARNING: delete not currently clearing tag assignments.")
+                        self.database.deleteDeckCategory(self.deck, delCatObj)
+                        self.deck.categories.remove(delCatObj)
+                        
             elif command == "count":
                 catsToCount = currentCats
                 if len(commandParts) >= 2:
                     catsToCount = []
                     for n in range(1, len(commandParts)):
-                        catsToCount.append((commandParts[n]))
-                catsToCount.sort()
+                        catName = commandParts[n]
+                        catObj = self.deck.getCategoryByName(catName)
+                        if not None == catObj:
+                            catsToCount.append(catObj)
+                            
+                catsToCount.sort(key=catNameSort)
                 print("===============================")
                 print("term counts per category")
                 for cat in catsToCount:
                     catCount = len(self.deck.getTermsInCategory(cat))
-                    print(f"  {cat}: {catCount}")
+                    print(f"  {cat.name}: {catCount}")
                 print("===============================")
 
         # note, we don't currently change input mode here in case
@@ -669,7 +696,5 @@ def importAllGreekFiles():
 
 if __name__ == "__main__":
     print("DEBUG running TextDrillRunner.main()...")
-    # importAllGreekFiles()
-
     TextDrillRunner.main(["deck=el_en"])
     # TextDrillRunner.main(sys.argv)
