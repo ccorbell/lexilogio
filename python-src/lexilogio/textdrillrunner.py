@@ -15,6 +15,7 @@ from lexilogio.deckdatabase import DeckDatabase
 from lexilogio.term import Term
 from lexilogio.drill import Drill
 from lexilogio.deck import Deck
+from lexilogio.version import LEXILOGIO_PRODUCT_VERSION_STR
 
 ARG_DIR = "dir"
 ARG_DECK = "deck"
@@ -50,6 +51,9 @@ class TextDrillRunner:
     def __init__(self):
         self.inputMode = INPUT_MODE_mainmenu
         self.quit = False
+        
+        self.controller = None
+        
         self.deck = None
         self.drill = None
         self.dataDir = None
@@ -61,6 +65,7 @@ class TextDrillRunner:
         #print(f" deckName: {deckName}")
 
         # configure database
+        
         self.dataDir = dataDir
         if not os.path.isdir(self.dataDir):
             print(f"Data directory {self.dataDir} does not exist, creating it...")
@@ -100,7 +105,7 @@ class TextDrillRunner:
             self.τ()
 
     def run_mainmenu_input(self):
-        print("\nlegilogio")
+        print(f"\n{LEXILOGIO_PRODUCT_VERSION_STR}")
         print("---------")
         print(f"current deck: {self.deck.name}")
         print("commands:")
