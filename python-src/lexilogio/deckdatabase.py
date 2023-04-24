@@ -5,25 +5,25 @@ Created on Sun Apr  9 00:01:09 2023
 
 @author: mathaes
 """
+import os
+import sqlite3
+from datetime import datetime
 
 from .deck import Deck
 from .term import Term
 from .tag import Tag
 from .category import Category
 
-import sqlite3
-from datetime import datetime
-
 
 DECK_TERMS_TABLE_NAME = "deck_terms"
 DECK_TERMS_COLUMN_NAMES = [
-    'pkey',
-    'question',
-    'answer',
-    'category', 
-    'bin',
-    'reversed_bin',
-    'last_drill_time'
+    "pkey",
+    "question",
+    "answer",
+    "category",
+    "bin",
+    "reversed_bin",
+    "last_drill_time",
 ]
 
 CATEGORY_TABLE_NAME = "deck_categories"
@@ -46,6 +46,9 @@ class DeckDatabase:
         self.dbPath = dbPath
         self.dbConnection = None
 
+    def getFileName(self):
+        return os.path.basename(self.dbPath)
+
     def getDbConnection(self):
         if None == self.dbConnection:
             self.dbConnection = sqlite3.connect(self.dbPath)
@@ -53,17 +56,17 @@ class DeckDatabase:
 
     def loadDeck(self, deckName):
         deck = Deck(deckName)
-        
+
         self.ensureDeckTablesExist(deck)
-        
+
         deck.terms = self.queryForAllDeckTerms(deck)
         deck.categories = self.getDeckCategories(deck)
         deck.tags = self.getDeckTags(deck)
-        
+
         termToTags, tagToTerms = self.getDeckTermTagRelations(deck)
         deck.termToTags = termToTags
         deck.tagToTerms = tagToTerms
-        
+
         self.readDeckPreferences(deck)
         return deck
 
@@ -80,10 +83,7 @@ class DeckDatabase:
         return DeckDatabase.queryResultsToTermArray(termResults)
 
     def queryForDeckTerms(
-        self,
-        deck: Deck,
-        category: Category = None,
-        binValues: list = None
+        self, deck: Deck, category: Category = None, binValues: list = None
     ):
         self.ensureDeckTablesExist(deck)
 
@@ -114,7 +114,9 @@ class DeckDatabase:
             binParams = binValues
 
         columnNamesCommaStr = ",".join(DECK_TERMS_COLUMN_NAMES)
-        querySQL = f"SELECT {columnNamesCommaStr} FROM {DECK_TERMS_TABLE_NAME} WHERE "
+        querySQL = (
+            f"SELECT {columnNamesCommaStr} FROM {DECK_TERMS_TABLE_NAME} WHERE "
+        )
 
         if whereClauseCount > 1:
             querySQL += "("
@@ -138,7 +140,7 @@ class DeckDatabase:
             querySQL += ")"
         querySQL += ";"
 
-        #print(f"DEBUG: query sql is \n{querySQL}")
+        # print(f"DEBUG: query sql is \n{querySQL}")
 
         con = self.getDbConnection()
         cur = con.cursor()
@@ -151,7 +153,9 @@ class DeckDatabase:
         terms = []
         for row in results:
             if not len(row) == len(DECK_TERMS_COLUMN_NAMES):
-                raise Exception(f"Unexpected row results for Term object: {row}")
+                raise Exception(
+                    f"Unexpected row results for Term object: {row}"
+                )
 
             term = Term()
             # columns should be: pkey, question, answer, category, bin, tags
@@ -188,7 +192,7 @@ class DeckDatabase:
                 (term.answer),
                 (term.category),
                 (term.bin),
-                (term.reversedBin)
+                (term.reversedBin),
             ]
 
             cur.execute(insertSQL, termParams)
@@ -233,7 +237,9 @@ WHERE pkey = ?;
 
         con.commit()
 
-    def updateTermBins(self, deck: Deck, termList: list, isReversedDrill=False):
+    def updateTermBins(
+        self, deck: Deck, termList: list, isReversedDrill=False
+    ):
         self.ensureDeckTablesExist(deck)
 
         UPDATE_BIN_SQL = f"UPDATE {DECK_TERMS_TABLE_NAME} SET bin = ?, last_drill_time = ? WHERE pkey = ?;"
@@ -265,7 +271,7 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
 
             params.append((term.pkey))
 
-            #print(f"DEBUG - executing updateSql {updateSql} with params {params}")
+            # print(f"DEBUG - executing updateSql {updateSql} with params {params}")
             cur.execute(updateSql, params)
 
         con.commit()
@@ -305,7 +311,7 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
             ],
         )
         newCatPK = cur.lastrowid
-        
+
         con.commit()
 
         newCat = Category(name=categoryName, pkey=newCatPK)
@@ -315,9 +321,7 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
         self.ensureDeckTablesExist(deck)
 
         # first clear the category from any assigned entries
-        updateSQL = (
-            f"UPDATE {CATEGORY_TABLE_NAME} SET category = NULL WHERE category = ?;"
-        )
+        updateSQL = f"UPDATE {CATEGORY_TABLE_NAME} SET category = NULL WHERE category = ?;"
         deleteSql = f"DELETE FROM {CATEGORY_TABLE_NAME} WHERE category = ?;"
 
         con = self.getDbConnection()
@@ -362,94 +366,102 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
 
     def getDeckTermTagRelations(self, deck: Deck):
         querySql = f"SELECT term, tag FROM {TAG_RELATION_TABLE_NAME};"
-        
+
         con = self.getDbConnection()
         cur = con.cursor()
 
         cur.execute(querySql)
         rows = cur.fetchall()
-        
+
         termToTags = {}
         tagToTerms = {}
-        
+
         for relRow in rows:
             termPK = relRow[0]
             tagPK = relRow[1]
-            
+
             if termPK in termToTags:
                 termToTags[termPK].append(tagPK)
             else:
                 termToTags[termPK] = [tagPK]
-                
+
             if tagPK in tagToTerms:
                 tagToTerms[tagPK].append(termPK)
             else:
                 tagToTerms[tagPK] = [termPK]
 
         return (termToTags, tagToTerms)
-        
+
     def applyTagToTerm(self, deck: Deck, term: Term, tag: Tag):
         if None == term.pkey or None == tag.pkey:
-            raise Exception("applyTagToTerm needs objects with database primary keys set.")
-            
-        insertSQL = f"INSERT INTO {TAG_RELATION_TABLE_NAME} (term, tag) VALUES (?, ?);"
-        params = [(term.pkey), (tag.pkey),]
-        
+            raise Exception(
+                "applyTagToTerm needs objects with database primary keys set."
+            )
+
+        insertSQL = (
+            f"INSERT INTO {TAG_RELATION_TABLE_NAME} (term, tag) VALUES (?, ?);"
+        )
+        params = [
+            (term.pkey),
+            (tag.pkey),
+        ]
+
         con = self.getDbConnection()
         cur = con.cursor()
-        
+
         cur.execute(insertSQL, params)
         con.commit()
-        
+
         if term.pkey in deck.termToTags:
             deck.termToTags[term.pkey].append(tag.pkey)
         else:
             deck.termToTags[term.pkey] = [tag.pkey]
-            
+
         if tag.pkey in deck.tagToTerms:
             deck.tagToTerms[tag.pkey].append(term.pkey)
         else:
             deck.tagToTerms[tag.pkey] = [term.pkey]
-            
+
     def insertDeckTag(self, deck: Deck, tag_name):
         self.ensureDeckTablesExist(deck)
 
         newTag = Tag(name=tag_name)
-        
+
         querySql = f"INSERT INTO {TAG_TABLE_NAME} (tag) VALUES (?);"
 
         con = self.getDbConnection()
         cur = con.cursor()
 
         cur.execute(querySql, [tag_name])
-        
+
         newTag.pkey = int(cur.lastrowid)
-        
+
         con.commit()
 
         deck.tags.append(newTag)
-        
+
         return newTag
 
-    def deleteDeckTag(self, deck: Deck, tag:Tag):
+    def deleteDeckTag(self, deck: Deck, tag: Tag):
         self.ensureDeckTablesExist(deck)
 
         if None == tag.pkey:
             raise Exception("Tag object missing pkey value.")
-            
+
         # first delete the relations
-        deleteTagRelationSQL = f"DELETE FROM {TAG_RELATION_TABLE_NAME} WHERE tag = ?;"
+        deleteTagRelationSQL = (
+            f"DELETE FROM {TAG_RELATION_TABLE_NAME} WHERE tag = ?;"
+        )
         deleteTagSQL = f"DELETE FROM {TAG_TABLE_NAME} WHERE pkey = ?;"
 
         con = self.getDbConnection()
         cur = con.cursor()
-        
+
         cur.execute(deleteTagRelationSQL, [tag.pkey])
         cur.execute(deleteTagSQL, [tag.pkey])
         con.commit()
 
         # note, caller should reload deck
-        
 
     def readDeckPreferences(self, deck: Deck):
         self.ensureDeckTablesExist(deck)
@@ -472,10 +484,14 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
         # print (f"DEBUG: useSR = {useSR}")
         reversedDrill = resultRow[2]
 
+        # spaced bin distribution placeholder - persistence and
+        # user-setting TBD
+        binDist = {0: 0.35, 1: 0.25, 2: 0.15, 3: 0.1, 4: 0.08, 5: 0.07}
         deck.prefs = {
             Deck.PREFSKEY_QUESTION_COUNT: int(qCount),
             Deck.PREFSKEY_SPACED_REPETITION: int(useSR) != 0,
             Deck.PREFSKEY_REVERSED_DRILL: int(reversedDrill) != 0,
+            Deck.PREFSKEY_SPACED_BIN_DISTRIBUTION: binDist,
         }
         return deck.prefs
 
@@ -518,7 +534,9 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
         if not self.checkDeckTableExists(deck):
             self.createDeckTables(deck)
             if not self.checkDeckTableExists(deck):
-                raise Exception(f"Could not find or create table for deck {deck.name}")
+                raise Exception(
+                    f"Could not find or create table for deck {deck.name}"
+                )
 
     def checkDeckTableExists(self, deck: Deck):
         CHECK_SQL = "SELECT name FROM sqlite_master;"

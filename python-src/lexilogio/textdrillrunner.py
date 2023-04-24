@@ -10,12 +10,15 @@ Created on Sat Apr  8 23:54:10 2023
 import sys
 import os
 import string
+import logging
 
 from lexilogio.deckdatabase import DeckDatabase
 from lexilogio.term import Term
 from lexilogio.drill import Drill
 from lexilogio.deck import Deck
 from lexilogio.version import LEXILOGIO_PRODUCT_VERSION_STR
+
+from lexilogio.controller import Controller
 
 ARG_DIR = "dir"
 ARG_DECK = "deck"
@@ -51,36 +54,19 @@ class TextDrillRunner:
     def __init__(self):
         self.inputMode = INPUT_MODE_mainmenu
         self.quit = False
-        
-        self.controller = None
-        
-        self.deck = None
-        self.drill = None
-        self.dataDir = None
-        self.dataFilePath = None
-        self.database = None
+
+        self.controller: Controller = Controller()
 
     def initialize(self, dataDir, deckName=None):
-        #print("DEBUG - initialize()")
-        #print(f" deckName: {deckName}")
-
-        # configure database
-        
-        self.dataDir = dataDir
-        if not os.path.isdir(self.dataDir):
-            print(f"Data directory {self.dataDir} does not exist, creating it...")
-            os.makedirs(self.dataDir, exist_ok=True)
-
-        databaseFileName = DeckDatabase.fileNameForDeckName(deckName)
-        self.dataFilePath = os.path.join(self.dataDir, databaseFileName)
-        self.database = DeckDatabase(self.dataFilePath)
+        self.controller.initialize(dataDir, deckName)
 
         # load or create deck
-        self.deck = self.database.loadDeck(deckName)
+        deck = self.controller.deck
+        deckFileName = self.controller.database.getFileName()
         print(
-            f"Loaded deck {deckName} from {databaseFileName}, which contains {len(self.deck.terms)} terms."
+            f"Loaded deck {deck.name} from {deckFileName}, which contains {len(deck.terms)} terms."
         )
-        if len(self.deck.terms) == 0:
+        if len(self.controller.deck.terms) == 0:
             print(
                 "NOTE: loxilogio needs terms to be added before a drill can be run from this deck"
             )
@@ -102,12 +88,12 @@ class TextDrillRunner:
         elif self.inputMode == INPUT_MODE_add:
             self.run_add()
         elif self.inputMode == INPUT_MODE_preferences:
-            self.τ()
+            self.run_prefs()
 
     def run_mainmenu_input(self):
         print(f"\n{LEXILOGIO_PRODUCT_VERSION_STR}")
         print("---------")
-        print(f"current deck: {self.deck.name}")
+        print(f"current deck: {self.controller.deck.name}")
         print("commands:")
         print("  (d) drill         (p) preferences    (a) add card")
         print("  (i) import cards  (e) export cards   (m) manage cards")
@@ -141,54 +127,67 @@ class TextDrillRunner:
             print(f"Option '{choice}' not recognized.")
 
     def prepare_and_run_drill(self):
-        self.deck = self.database.loadDeck(self.deck.name)
+        self.controller.reloadDeck()
 
-        drillCategory = None
-        categoryMenu = "Categories:\n  (*) (all categories)\n"
-
-        drillCatD = {}
-        n = 0
-        for catObj in self.deck.categories:
-            catKey = string.ascii_lowercase[n]
-            drillCatD[catKey] = catObj
-            categoryMenu += f"  ({catKey}) {catObj.name}\n"
-            n = n + 1
-
-        chosenKey = None
-        while None == chosenKey:
-            print(categoryMenu)
-            chosenKey = input("Enter letter for drill category: ").strip().lower()
-            if chosenKey == "*" or len(chosenKey) == 0:
-                drillCategory = None
-                break
-            elif not chosenKey in drillCatD:
-                print(f"Invalid choice '{chosenKey}'")
-                chosenKey = None
-            else:
-                drillCategory = drillCatD[chosenKey]
+        # show a category picker
+        drillCategory = self.runCategoryPicker()
 
         # build drill from params
-        print("Creating drill...")
-        self.drill = Drill.makeDrillFromDeck(deck=self.deck, category=drillCategory)
+        print("\nCreating drill...")
+        self.controller.makeNewDrill(category=drillCategory)
+        self.drill = self.controller.drill
+
         if None == self.drill:
             print("ERROR creating drill.")
             self.inputMode = INPUT_MODE_mainmenu
             return
 
-        print("Starting drill. Hit return to show answer for each question,")
-        print("then rate your knowledge of the answer on a scale of 1-5, where")
+        print("\nStarting drill. Hit return to show answer for each question,")
+        print(
+            "then rate your knowledge of the answer on a scale of 1-5, where"
+        )
         print(
             "1 = not known, 2 = hard to recall, 3 = somewhat known, 4 = familiar, 5 = well known"
         )
-        print(" (enter x at any time to exit drill) ")
+        print(" (enter x at any time to exit drill, t to tag a term) ")
 
         self.inputMode = INPUT_MODE_question
 
+    def runCategoryPicker(self, prompt="Categories:"):
+        chosenCategory = None
+
+        categoryPickerText = "{prompt}\n  (*) (all categories)\n"
+        categories = self.controller.getCategoryList()
+
+        catPickerD = {}
+        n = 0
+        for catObj in categories:
+            alphaKey = string.ascii_lowercase[n]
+            catPickerD[alphaKey] = catObj
+            categoryPickerText += f"  ({alphaKey}) {catObj.name}\n"
+            n = n + 1
+
+        while None == chosenCategory:
+            print(categoryPickerText)
+            chosenKey = (
+                input("Enter letter for category, x to exit: ").strip().lower()
+            )
+            if chosenKey == "*" or chosenKey == "x" or len(chosenKey) == 0:
+                chosenCategory = None
+                break
+            elif not chosenKey in catPickerD:
+                print(f"Invalid choice '{chosenKey}'")
+                chosenKey = None
+            else:
+                chosenCategory = catPickerD[chosenKey]
+
+        return chosenCategory
+
     def run_drill_question_input(self):
-        # print("DEBUG - run_drill_question_input...")
-        term = self.drill.currentTerm()
+        term = self.controller.currentDrillTerm()
+
         flashQuestion = term.question
-        if self.deck.isReversedDrill():
+        if self.controller.deck.isReversedDrill():
             flashQuestion = term.answer
 
         ret = input(f"\n\t{flashQuestion}\n").strip().lower()
@@ -201,9 +200,9 @@ class TextDrillRunner:
 
     def run_drill_response_input(self):
         # print("DEBUG - run_drill_response_input...")
-        term = self.drill.currentTerm()
+        term = self.controller.currentDrillTerm()
         flashAnswer = term.answer
-        if self.deck.isReversedDrill():
+        if self.controller.getPref_isReversedDrill():
             flashAnswer = term.question
 
         rating = 0
@@ -212,6 +211,9 @@ class TextDrillRunner:
             if rating == "x":
                 self.end_drill()
                 return
+            if rating == "t":
+                print("term tagging not yet implemented - coming soon!...")
+                continue
             try:
                 rating = int(rating)
             except ValueError:
@@ -225,21 +227,17 @@ class TextDrillRunner:
                     f"invalid rating value {rating}, please enter a value from 1 to 5"
                 )
                 continue
-        self.drill.assignBinValue(rating, self.deck.isReversedDrill())
-        self.drill.advance()
+
+        self.controller.setTermBinValue(rating)
+        self.controller.advanceDrill()
+
         self.inputMode = INPUT_MODE_question
-        if self.drill.isComplete():
+        if self.controller.isDrillCompleted():
             self.end_drill()
 
     def end_drill(self):
         print("Exiting drill...")
-        updatedTerms = self.drill.getUpdatedTerms()
-
-        if len(updatedTerms) > 0:
-            self.database.updateTermBins(
-                self.deck, updatedTerms, self.deck.isReversedDrill()
-            )
-
+        self.controller.saveUpdatedDrillTerms()
         self.inputMode = INPUT_MODE_mainmenu
 
     def run_export(self):
@@ -249,17 +247,21 @@ class TextDrillRunner:
 
         choice = None
         while not choice == "x":
+            self.controller.reloadPrefs()
 
-            self.database.readDeckPreferences(self.deck)
+            qcPref = self.controller.getPref_drillQuestionCount()
 
-            qcPref = self.deck.prefs[Deck.PREFSKEY_QUESTION_COUNT]
-            spacedRepPref = self.deck.prefs[Deck.PREFSKEY_SPACED_REPETITION]
-            reversedPref = self.deck.prefs[Deck.PREFSKEY_REVERSED_DRILL]
+            spacedRepPref = self.controller.getPref_isUsingSpacedRepetition()
+
+            reversedPref = self.controller.getPref_isReversedDrill()
+
+            binDist = self.controller.getPref_spacedBinDistribution()
 
             print("\nCurrent lexilogio preferences:")
             print(f" (a) drill question count: {qcPref}")
-            print(f" (b) use spaced repetition: {spacedRepPref}")
-            print(f" (c) reverse drill (show answers first): {reversedPref}")
+            print(f" (b) reverse drill (show answers first): {reversedPref}")
+            print(f" (c) use spaced repetition: {spacedRepPref}")
+            print(f" (d) spaced bin distribution: {binDist}")
 
             choice = (
                 input("\nEnter letter of preference to change, or x to exit: ")
@@ -267,33 +269,43 @@ class TextDrillRunner:
                 .lower()
             )
             if choice == "a":
-                newCount = int(input("Enter new question count: ").strip().lower())
+                newCount = int(
+                    input("Enter new question count: ").strip().lower()
+                )
                 if newCount <= 0:
                     print("ERROR: invalid input.")
                 else:
-                    self.deck.prefs[Deck.PREFSKEY_QUESTION_COUNT] = newCount
-                    self.database.writeDeckPreferences(self.deck)
+                    self.controller.setPref_drillQuestionCount(newCount)
 
             elif choice == "b":
-                toggleSpaceRep = not spacedRepPref
-                yn = (
-                    input(f"Set 'use spaced repetition' to {toggleSpaceRep}? (y/n): ")
-                    .strip()
-                    .lower()
-                )
-                if yn.startswith("y"):
-                    self.deck.prefs[Deck.PREFSKEY_SPACED_REPETITION] = toggleSpaceRep
-                    self.database.writeDeckPreferences(self.deck)
-            elif choice == "c":
                 toggleReversedPref = not reversedPref
                 yn = (
-                    input(f"Set 'reverse drill' to {toggleReversedPref}? (y/n): ")
+                    input(
+                        f"Set 'reverse drill' to {toggleReversedPref}? (y/n): "
+                    )
                     .strip()
                     .lower()
                 )
                 if yn.startswith("y"):
-                    self.deck.prefs[Deck.PREFSKEY_REVERSED_DRILL] = toggleReversedPref
+                    self.controller.setPref_isReversedDri(toggleReversedPref)
+
+            elif choice == "c":
+                toggleSpaceRep = not spacedRepPref
+                yn = (
+                    input(
+                        f"Set 'use spaced repetition' to {toggleSpaceRep}? (y/n): "
+                    )
+                    .strip()
+                    .lower()
+                )
+                if yn.startswith("y"):
+                    self.controller.getPref_setUsingSpacedRepetition(
+                        toggleSpaceRep
+                    )
                     self.database.writeDeckPreferences(self.deck)
+
+            elif choice == "d":
+                print("bin distribution input not yet implemented...")
 
     def run_add(self):
 
@@ -320,7 +332,7 @@ class TextDrillRunner:
             else:
                 newTerm.answer = answer.strip()
 
-            # TODO: choose a defined categories?
+            # TODO: choose from defined categories?
             category = input("category: ")
             if category.strip().lower() == "x":
                 cancelled = True
@@ -351,7 +363,7 @@ class TextDrillRunner:
                 # TODO: sanity check newTerm - non-empty
                 # Q/A, valid category and tags, etc.
 
-                self.database.insertTerms([newTerm])
+                self.controller.database.insertTerms([newTerm])
 
                 # TODO: reload deck?
 
@@ -384,18 +396,19 @@ class TextDrillRunner:
         importResult = self.do_file_import(filePath)
         if importResult:
             print("Reloading deck...")
-            self.deck = self.database.loadDeck(self.deck.name)
+            self.controller.reloadDeck()
 
     def do_file_import(self, filePath):
         if not (os.path.isfile(filePath)):
             print(f"ERROR: {filePath} is not a valid file path.")
             return False
-        
+
+        categories = self.controller.getCategoryList()
         runningCategoryPK = None
         catLookup = {}
-        for cat in self.deck.categories:
+        for cat in categories:
             catLookup[cat.name] = cat
-        
+
         importLines = None
         with open(filePath, "r") as importFile:
             importLines = importFile.readlines()
@@ -403,9 +416,11 @@ class TextDrillRunner:
         if None == importLines:
             print("ERROR: failed to read any lines from file.")
             return
-        
-        print(f"DEBUG - number of lines read from import file: {len(importLines)}")
-        
+
+        print(
+            f"DEBUG - number of lines read from import file: {len(importLines)}"
+        )
+
         newTerms = []
 
         for termLine in importLines:
@@ -422,12 +437,11 @@ class TextDrillRunner:
                             newCat = catLookup[catName]
                         else:
                             print(f"CREATING NEW CATEGORY: {catName}")
-                            newCat = self.database.insertDeckCategory(self.deck, catName)
-                            self.deck.categories.append(newCat)
+                            newCat = self.controller.addNewCategory(catName)
                             catLookup[catName] = newCat
-                            
+
                         runningCategoryPK = newCat.pkey
-                        print(f"Importing terms with category {catName}")                        
+                        print(f"Importing terms with category {catName}")
                     else:
                         raise Exception(
                             f"ERROR - category line should have the format # category=(value), found:\n{termLine}"
@@ -449,12 +463,11 @@ class TextDrillRunner:
 
         if len(newTerms) > 0:
             print(f"Importing {len(newTerms)} terms...")
-            self.database.insertTerms(self.deck, newTerms)
+            self.controller.addNewTerms(newTerms)
             return True
         else:
             print("No terms found to import in file {filePath}")
             return False
-
 
     def do_file_export(self, filePath):
         print("File export not yet implemented")
@@ -466,7 +479,9 @@ class TextDrillRunner:
         print("current deck: {self.deck.name}")
 
         choice = (
-            input("(d) drill (i) import/add (c) categories (t) tags (x) exit: ")
+            input(
+                "(d) drill (i) import/add (c) categories (t) tags (x) exit: "
+            )
             .strip()
             .lower()
         )
@@ -478,15 +493,10 @@ class TextDrillRunner:
     def run_tags_edit(self):
 
         exitTagEditor = False
-        
-        def tagNameSort(tag):
-            return tag.name
-            
+
         while not exitTagEditor:
-            
-            
-            currentTags = self.database.getDeckTags(self.deck)
-            currentTags.sort(key=tagNameSort)
+
+            currentTags = self.controller.getTagsList()
 
             print(
                 "\nEdit tags list. Tags must have no spaces and are case-insensitive.\nCurrent tags:"
@@ -507,15 +517,17 @@ class TextDrillRunner:
                 break
             elif command == "add":
                 if len(commandParts) < 2:
-                    print("ERROR: add command should be followed by new tag name.")
+                    print(
+                        "ERROR: add command should be followed by new tag name."
+                    )
                 else:
                     tagName = commandParts[1].strip()
                     if tagName in currentTags:
                         print(f'ERROR: tag "{tagName}" already exists.')
                     else:
                         print(f'Creating tag "{tagName}"...')
-                        newTag = self.database.insertDeckTag(self.deck, tagName)
-                        self.deck.tags.append(newTag)
+                        self.controller.addTag(tagName)
+
             elif command == "delete":
                 if len(commandParts) < 2:
                     print(
@@ -529,10 +541,12 @@ class TextDrillRunner:
                             delTagObj = tagObj
 
                     if None == delTagObj:
-                        print(f'WARNING: tag "{tagName}" not found, nothing to delete.')
+                        print(
+                            f'WARNING: tag "{tagName}" not found, nothing to delete.'
+                        )
                     else:
                         print(f'Deleting tag "{delTagObj.name}"...')
-                        self.database.deleteDeckTag(self.deck, delTagObj)
+                        self.controller.deleteTag(delTagObj)
 
         # note, we don't currently change input mode here in case
         # we are editing tags in the midst of a drill
@@ -541,11 +555,11 @@ class TextDrillRunner:
         exitCatEditor = False
 
         def catNameSort(catObj):
-            return catObj.name        
+            return catObj.name
 
         while not exitCatEditor:
 
-            currentCats = self.database.getDeckCategories(self.deck)
+            currentCats = self.controller.getCategoryList()
             currentCats.sort(key=catNameSort)
 
             print("\nEdit categories list.\nCurrent categories:")
@@ -567,16 +581,17 @@ class TextDrillRunner:
                 break
             elif command == "add":
                 if len(commandParts) < 2:
-                    print("ERROR: add command should be followed by new category name.")
+                    print(
+                        "ERROR: add command should be followed by new category name."
+                    )
                 else:
                     catName = commandParts[1].strip()
                     if catName in currentCats:
                         print(f'ERROR: category "{catName}" already exists.')
                     else:
                         print(f'Creating category "{catName}"...')
-                        newCat = self.database.insertDeckCategory(self.deck, catName)
-                        self.deck.categories.append(newCat)
-                        
+                        self.controller.addNewCategory(catName)
+
             elif command == "delete":
                 if len(commandParts) < 2:
                     print(
@@ -589,31 +604,34 @@ class TextDrillRunner:
                         if catObj.name == catName:
                             delCatObj = catObj
                             break
-                        
+
                     if None == delCatObj:
                         print(
                             f'WARNING: category "{catName}" not found, nothing to delete.'
                         )
                     else:
                         print(f'Deleting category "{catName}"...')
-                        self.database.deleteDeckCategory(self.deck, delCatObj)
-                        self.deck.categories.remove(delCatObj)
-                        
+                        self.controller.deleteCategory(delCatObj)
+
             elif command == "count":
                 catsToCount = currentCats
                 if len(commandParts) >= 2:
                     catsToCount = []
                     for n in range(1, len(commandParts)):
                         catName = commandParts[n]
-                        catObj = self.deck.getCategoryByName(catName)
+                        catObj = self.controller.deck.getCategoryByName(
+                            catName
+                        )
                         if not None == catObj:
                             catsToCount.append(catObj)
-                            
+
                 catsToCount.sort(key=catNameSort)
                 print("===============================")
                 print("term counts per category")
                 for cat in catsToCount:
-                    catCount = len(self.deck.getTermsInCategory(cat))
+                    catCount = len(
+                        self.controller.deck.getTermsInCategory(cat)
+                    )
                     print(f"  {cat.name}: {catCount}")
                 print("===============================")
 
@@ -677,26 +695,14 @@ class TextDrillRunner:
 
 
 def importAllGreekFiles():
-    adjFile = (
-        "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-adjectives-master.txt"
-    )
-    advFile = (
-        "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-adverbs-master.txt"
-    )
+    adjFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-adjectives-master.txt"
+    advFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-adverbs-master.txt"
     conjFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-conjunctions-master.txt"
-    nounFile = (
-        "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-nouns-master.txt"
-    )
+    nounFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-nouns-master.txt"
     prepFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-prepositions-master.txt"
-    phraseFile = (
-        "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-phrases-master.txt"
-    )
-    pronounFile = (
-        "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-pronouns-master.txt"
-    )
-    verbsFile = (
-        "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-verbs-master.txt"
-    )
+    phraseFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-phrases-master.txt"
+    pronounFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-pronouns-master.txt"
+    verbsFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-verbs-master.txt"
 
     importFiles = [
         adjFile,

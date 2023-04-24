@@ -13,6 +13,7 @@ from datetime import datetime
 from lexilogio.deck import Deck
 from lexilogio.category import Category
 
+
 class Drill:
     def __init__(self, terms):
         self.terms = terms
@@ -21,7 +22,7 @@ class Drill:
     def advance(self):
         self.cursor += 1
 
-    def isComplete(self):
+    def isCompleted(self):
         return self.cursor >= len(self.terms)
 
     def currentTerm(self):
@@ -58,47 +59,52 @@ class Drill:
 
         if usingSpacedRep:
 
-            #print(
-            #    f"DEBUG - makeDrillFromDeck, category={category}, usingSpacedRep=True"
-            #)
-            #print(f"  questionCount: {questionCount}")
-            #print(f"  isReversed: {isReversed}")
-
             binTerms = {}
-            binTerms[0] = deck.getTermsInCategoryOfBinValue(category, 0, isReversed)
-            binTerms[1] = deck.getTermsInCategoryOfBinValue(category, 1, isReversed)
-            binTerms[2] = deck.getTermsInCategoryOfBinValue(category, 2, isReversed)
-            binTerms[3] = deck.getTermsInCategoryOfBinValue(category, 3, isReversed)
-            binTerms[4] = deck.getTermsInCategoryOfBinValue(category, 4, isReversed)
-            binTerms[5] = deck.getTermsInCategoryOfBinValue(category, 5, isReversed)
+            binTerms[0] = deck.getTermsInCategoryOfBinValue(
+                category, 0, isReversed
+            )
+            binTerms[1] = deck.getTermsInCategoryOfBinValue(
+                category, 1, isReversed
+            )
+            binTerms[2] = deck.getTermsInCategoryOfBinValue(
+                category, 2, isReversed
+            )
+            binTerms[3] = deck.getTermsInCategoryOfBinValue(
+                category, 3, isReversed
+            )
+            binTerms[4] = deck.getTermsInCategoryOfBinValue(
+                category, 4, isReversed
+            )
+            binTerms[5] = deck.getTermsInCategoryOfBinValue(
+                category, 5, isReversed
+            )
 
-            for n in range(0, 6):
-                numTerms = len(binTerms[n])
-                #print(f"  number of terms in bin {n}: {numTerms}")
-
-                # sanity-check: do we even have enough terms for desired questionCount?
+            # sanity-check: do we even have enough terms for desired questionCount?
             termTotal = 0
             for n in range(0, 6):
                 termTotal += len(binTerms[n])
 
-            #print(f"  termTotal: {termTotal}")
+            # print(f"  termTotal: {termTotal}")
             if questionCount > termTotal:
                 questionCount = termTotal
-                print(f"  only {termTotal} matching terms available; adjusted questionCount: {questionCount}")
+                print(
+                    f"  only {termTotal} matching terms available; adjusted questionCount: {questionCount}"
+                )
 
             # TODO make this distribution a preference the user can edit
+            binDist = deck.getSpacedBinDistribution()
+
+            # TODO: when binDist is user-settable, add fix-up here or in Deck
+            # to coerce distribute values to 1.0 sum;, proportionally;
+            # for now the hard-coded value is good...
             binCounts = {}
-            binCounts[0] = math.ceil(questionCount * (0.35))
-            binCounts[1] = math.ceil(questionCount * (0.25))
-            binCounts[2] = math.ceil(questionCount * (0.15))
-            binCounts[3] = math.floor(questionCount * (0.1))
-            binCounts[4] = math.floor(questionCount * (0.08))
-            binCounts[5] = math.floor(questionCount * (0.07))
+            for n in range(0, 6):
+                binCounts[n] = math.ceil(questionCount * binDist[n])
 
             desiredDrillTermTotal = 0
             for n in range(0, 6):
                 desiredDrillTerms = binCounts[n]
-                #print(f"  desired drill terms for bin {n}: {desiredDrillTerms}")
+                # print(f"  desired drill terms for bin {n}: {desiredDrillTerms}")
                 desiredDrillTermTotal += desiredDrillTerms
 
             # rounding may have desired term total off by a small amount
@@ -106,16 +112,16 @@ class Drill:
                 countDiff = desiredDrillTermTotal - questionCount
                 if countDiff > 0:
                     # need to reduce binCounts
-                    #print("  subtracting one from bin 0 count...")
+                    # print("  subtracting one from bin 0 count...")
                     binCounts[0] = binCounts[0] - 1
                     desiredDrillTermTotal -= 1
                 else:
                     # need to increase binCounts
-                    #print("  adding one to bin 0 count...")
+                    # print("  adding one to bin 0 count...")
                     binCounts[0] = binCounts[0] + 1
                     desiredDrillTermTotal += 1
 
-            #print("  adjusting bin distributions based on available terms...")
+            # print("  adjusting bin distributions based on available terms...")
 
             # first we shift toward the front, then toward the back:
             for n in range(0, 5):
@@ -124,11 +130,13 @@ class Drill:
 
                 shortage = binCounts[adjIndex] - len(binTerms[adjIndex])
                 if shortage > 0:
-                    #print(
+                    # print(
                     #    f"  shifting {shortage} terms from bin {adjIndex} to {shiftToIndex}"
-                    #)
+                    # )
                     binCounts[adjIndex] = binCounts[adjIndex] - shortage
-                    binCounts[shiftToIndex] = binCounts[shiftToIndex] + shortage
+                    binCounts[shiftToIndex] = (
+                        binCounts[shiftToIndex] + shortage
+                    )
 
             for n in range(0, 5):
                 adjIndex = n
@@ -136,17 +144,19 @@ class Drill:
 
                 shortage = binCounts[adjIndex] - len(binTerms[adjIndex])
                 if shortage > 0:
-                    #print(
+                    # print(
                     #    f"  shifting {shortage} terms from bin {adjIndex} to {shiftToIndex}"
-                    #)
+                    # )
                     binCounts[adjIndex] = binCounts[adjIndex] - shortage
-                    binCounts[shiftToIndex] = binCounts[shiftToIndex] + shortage
+                    binCounts[shiftToIndex] = (
+                        binCounts[shiftToIndex] + shortage
+                    )
 
-            #print("  FINAL COUNTS FROM EACH BIN:")
-            #for n in range(0, 6):
+            # print("  FINAL COUNTS FROM EACH BIN:")
+            # for n in range(0, 6):
             #    print(f"  bin[{n}]: {binCounts[n]} from {len(binTerms[n])} available.")
 
-            #print("  making random term selections...")
+            # print("  making random term selections...")
             # now we are ready to randomly select terms from each bin
             drill.terms = []
             for n in range(0, 6):
@@ -164,7 +174,7 @@ class Drill:
 
             random.shuffle(drill.terms)
 
-            #print(f"  drill completed, {len(drill.terms)} terms chosen.")
+            # print(f"  drill completed, {len(drill.terms)} terms chosen.")
 
         else:  # not using spaced rep from bins, just random from all terms
             sourceTerms = []
@@ -192,4 +202,3 @@ class Drill:
                 drill.terms.extend(sourceTerms)
 
         return drill
-
