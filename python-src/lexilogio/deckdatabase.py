@@ -138,7 +138,7 @@ class DeckDatabase:
             querySQL += ")"
         querySQL += ";"
 
-        print(f"DEBUG: query sql is \n{querySQL}")
+        #print(f"DEBUG: query sql is \n{querySQL}")
 
         con = self.getDbConnection()
         cur = con.cursor()
@@ -175,23 +175,20 @@ class DeckDatabase:
         # preserving drill time a new method will be required, esp. if we
         # want to use last_drill_time to reconcile any conflicts.
 
-        insertSQL = f"""INSERT INTO {DECK_TERMS_TABLE_NAME} (question, answer, category, bin, reversed_bin, tags) 
-    VALUES (?, ?, ?, ?, ?, ?);
+        insertSQL = f"""INSERT INTO {DECK_TERMS_TABLE_NAME} (question, answer, category, bin, reversed_bin) 
+    VALUES (?, ?, ?, ?, ?);
 """
 
         con = self.getDbConnection()
         cur = con.cursor()
 
         for term in termList:
-            tagStr = term.getTagStr()
-
             termParams = [
                 (term.question),
                 (term.answer),
                 (term.category),
                 (term.bin),
-                (term.reversedBin),
-                (tagStr),
+                (term.reversedBin)
             ]
 
             cur.execute(insertSQL, termParams)
@@ -268,7 +265,7 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
 
             params.append((term.pkey))
 
-            print(f"DEBUG - executing updateSql {updateSql} with params {params}")
+            #print(f"DEBUG - executing updateSql {updateSql} with params {params}")
             cur.execute(updateSql, params)
 
         con.commit()

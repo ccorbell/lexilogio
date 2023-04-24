@@ -57,8 +57,8 @@ class TextDrillRunner:
         self.database = None
 
     def initialize(self, dataDir, deckName=None):
-        print("DEBUG - initialize()")
-        print(f" deckName: {deckName}")
+        #print("DEBUG - initialize()")
+        #print(f" deckName: {deckName}")
 
         # configure database
         self.dataDir = dataDir
@@ -385,29 +385,45 @@ class TextDrillRunner:
         if not (os.path.isfile(filePath)):
             print(f"ERROR: {filePath} is not a valid file path.")
             return False
-        runningCategory = None
-
+        
+        runningCategoryPK = None
+        catLookup = {}
+        for cat in self.deck.categories:
+            catLookup[cat.name] = cat
+        
         importLines = None
         with open(filePath, "r") as importFile:
             importLines = importFile.readlines()
 
+        if None == importLines:
+            print("ERROR: failed to read any lines from file.")
+            return
+        
+        print(f"DEBUG - number of lines read from import file: {len(importLines)}")
+        
         newTerms = []
-        newCategories = set()
 
         for termLine in importLines:
             # process comments
             if termLine.startswith("#"):
                 procLine = termLine.replace("#", "").strip()
                 if procLine.startswith("category"):
-                    runningCategory = None
+                    runningCategoryPK = None
                     catTerms = procLine.split("=")
                     if len(catTerms) == 2:
-                        runningCategory = catTerms[1].strip()
-                        if len(runningCategory) > 0:
-                            print(f"Importing terms with category {runningCategory}")
-                            if not runningCategory in self.deck.categories:
-                                newCategories.add(runningCategory)
-                    if None == runningCategory:
+                        newCat = None
+                        catName = catTerms[1].strip()
+                        if catName in catLookup:
+                            newCat = catLookup[catName]
+                        else:
+                            print(f"CREATING NEW CATEGORY: {catName}")
+                            newCat = self.database.insertDeckCategory(self.deck, catName)
+                            self.deck.categories.append(newCat)
+                            catLookup[catName] = newCat
+                            
+                        runningCategoryPK = newCat.pkey
+                        print(f"Importing terms with category {catName}")                        
+                    else:
                         raise Exception(
                             f"ERROR - category line should have the format # category=(value), found:\n{termLine}"
                         )
@@ -422,13 +438,9 @@ class TextDrillRunner:
                 newTerm = Term()
                 newTerm.question = termQA[0].strip()
                 newTerm.answer = termQA[1].strip()
-                if not None == runningCategory:
-                    newTerm.category = runningCategory
+                if not None == runningCategoryPK:
+                    newTerm.category = runningCategoryPK
                 newTerms.append(newTerm)
-
-        if len(newCategories) > 0:
-            for category in newCategories:
-                self.database.insertDeckCategory(self.deck, category)
 
         if len(newTerms) > 0:
             print(f"Importing {len(newTerms)} terms...")
@@ -437,6 +449,7 @@ class TextDrillRunner:
         else:
             print("No terms found to import in file {filePath}")
             return False
+
 
     def do_file_export(self, filePath):
         print("File export not yet implemented")
