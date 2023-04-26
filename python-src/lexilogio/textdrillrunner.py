@@ -11,6 +11,7 @@ import sys
 import os
 import string
 import logging
+import copy
 
 from lexilogio.deckdatabase import DeckDatabase
 from lexilogio.term import Term
@@ -337,13 +338,50 @@ class TextDrillRunner:
                     .lower()
                 )
                 if yn.startswith("y"):
-                    self.controller.getPref_setUsingSpacedRepetition(
+                    self.controller.setPref_setUsingSpacedRepetition(
                         toggleSpaceRep
                     )
-                    self.database.writeDeckPreferences(self.deck)
 
             elif choice == "d":
-                print("bin distribution input not yet implemented...")
+                newDist = self.run_spaced_distribution_input()
+                if type(newDist) == int and newDist == -1:
+                    self.inputMode = INPUT_MODE_mainmenu
+                    return
+                elif type(newDist) == dict and len(newDist) == 6:
+                    self.controller.setPref_spacedBinDistribution(newDist)
+
+    def run_spaced_distribution_input(self):
+        binDist = self.controller.getPref_spacedBinDistribution()
+
+        newBinDist = copy.deepcopy(binDist)
+
+        print("\nThe bin distributions control relatively how many terms are ")
+        print("selected for a drill from each 'bin', where bin 0 is all new")
+        print("terms, bin 1 are the least well known, and bin 5 are the best")
+        print("known.\n")
+
+        print("Each bin value should be positive or zero. They need not add")
+        print("up to any number, but will be interpreted relatively, so a")
+        print("5 for one bin and 1 for another mans that questions from the")
+        print("first bin will occur around 5x as often as the other bin.\n")
+
+        print(f"Current values: {binDist}")
+
+        for n in range(0, 6):
+            newValue = input(
+                f"  bin [{n}] weight (return to keep value {binDist[n]}): "
+            ).strip()
+            if newValue == "x":
+                return -1
+            if len(newValue) > 0:
+                newValue = float(newValue)
+                if newValue < 0:
+                    print(f"ERROR: negative input {newValue}")
+                    return -1
+
+                newBinDist[n] = newValue
+
+        return newBinDist
 
     def run_add(self):
 
@@ -686,7 +724,7 @@ class TextDrillRunner:
         foundImportCmd = False
         foundExportCmd = False
 
-        logLevelStr = "ERROR"
+        logLevelStr = "DEBUG"
 
         for arg in argv:
 

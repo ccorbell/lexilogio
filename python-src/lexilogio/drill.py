@@ -107,8 +107,19 @@ class Drill:
             # to coerce distribute values to 1.0 sum;, proportionally;
             # for now the hard-coded value is good...
             binCounts = {}
+            binSum = 0
             for n in range(0, 6):
-                binCounts[n] = math.ceil(questionCount * binDist[n])
+                binSum += binDist[n]
+
+            if binSum <= 0:
+                logging.error(
+                    f"bin distribution values have a 0 or negative sum: {binDist}"
+                )
+                raise Exception(
+                    f"Bad values for bins: {binDist}; fix via preferences"
+                )
+            for n in range(0, 6):
+                binCounts[n] = math.ceil(questionCount * (binDist[n] / binSum))
 
             desiredDrillTermTotal = 0
             for n in range(0, 6):

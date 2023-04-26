@@ -137,6 +137,10 @@ class Controller:
     def getPref_spacedBinDistribution(self):
         return self.deck.getSpacedBinDistribution()
 
+    def setPref_spacedBinDistribution(self, binDist):
+        self.deck.prefs[Deck.PREFSKEY_SPACED_BIN_DISTRIBUTION] = binDist
+        self.database.writeDeckPreferences(self.deck)
+
     # -------------------------------------- Drill
 
     def makeNewDrill(self, category: Category = None):

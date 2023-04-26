@@ -469,7 +469,19 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
     def readDeckPreferences(self, deck: Deck):
         self.ensureDeckTablesExist(deck)
 
-        READ_SQL = f"SELECT drill_question_count, space_repetition_bias, reverse_drill FROM {PREFS_TABLE_NAME};"
+        READ_SQL = f"""SELECT 
+        bin0_weight,
+        bin1_weight,
+        bin2_weight,
+        bin3_weight,
+        bin4_weight,
+        bin5_weight,
+        drill_question_count, 
+        space_repetition_bias, 
+        reverse_drill
+        FROM {PREFS_TABLE_NAME};
+        """
+
         con = self.getDbConnection()
         cur = con.cursor()
 
@@ -481,15 +493,15 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
             cur = con.cursor()
             resultRow = cur.execute(READ_SQL).fetchone()
 
-        qCount = resultRow[0]
+        binDist = {}
+        for n in range(0, 6):
+            binDist[n] = float(resultRow[n])
+        qCount = resultRow[6]
         # print (f"DEBUG: qCount = {qCount}")
-        useSR = resultRow[1]
+        useSR = resultRow[7]
         # print (f"DEBUG: useSR = {useSR}")
-        reversedDrill = resultRow[2]
+        reversedDrill = resultRow[8]
 
-        # spaced bin distribution placeholder - persistence and
-        # user-setting TBD
-        binDist = {0: 0.35, 1: 0.25, 2: 0.15, 3: 0.1, 4: 0.08, 5: 0.07}
         deck.prefs = {
             Deck.PREFSKEY_QUESTION_COUNT: int(qCount),
             Deck.PREFSKEY_SPACED_REPETITION: int(useSR) != 0,
@@ -511,6 +523,8 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
         if reversedDrill:
             reversedDrillIntValue = 1
 
+        binDist = deck.prefs[Deck.PREFSKEY_SPACED_BIN_DISTRIBUTION]
+
         DELETE_OLD_ENTRY_SQL = f"DELETE FROM {PREFS_TABLE_NAME};"
 
         con = self.getDbConnection()
@@ -519,13 +533,20 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
         con.commit()
 
         WRITE_SQL = f"""INSERT INTO {PREFS_TABLE_NAME} (
+        bin0_weight, bin1_weight, bin2_weight, bin3_weight, bin4_weight, bin5_weight,
     drill_question_count, space_repetition_bias, reverse_drill) VALUES (
-    ?, ?, ?
+    ?, ?, ?, ?, ?, ?, ?, ?, ?
 );"""
         cur = con.cursor()
         cur.execute(
             WRITE_SQL,
             [
+                (binDist[0]),
+                (binDist[1]),
+                (binDist[2]),
+                (binDist[3]),
+                (binDist[4]),
+                (binDist[5]),
                 (qCount),
                 (useSRintValue),
                 (reversedDrillIntValue),
@@ -601,7 +622,13 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
     drill_question_count INTEGER DEFAULT 25 NOT NULL,
     space_repetition_bias INTEGER DEFAULT 1 NOT NULL,
     reverse_drill INTEGER DEFAULT 0 NOT NULL,
-    category TEXT DEFAULT NULL
+    category TEXT DEFAULT NULL,
+    bin0_weight REAL DEFAULT 0.36,
+    bin1_weight REAL DEFAULT 0.25,
+    bin2_weight REAL DEFAULT 0.16,
+    bin3_weight REAL DEFAULT 0.11,
+    bin4_weight REAL DEFAULT 0.07,
+    bin5_weight REAL DEFAULT 0.05
 );
 """
         cur.execute(CREATE_SQL_prefs)
