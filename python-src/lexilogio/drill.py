@@ -9,6 +9,7 @@ Created on Sat Apr  8 23:45:44 2023
 import random
 import math
 from datetime import datetime
+import logging
 
 from lexilogio.deck import Deck
 from lexilogio.category import Category
@@ -55,6 +56,12 @@ class Drill:
         usingSpacedRep = deck.isUsingSpacedRepetition()
         isReversed = deck.isReversedDrill()
 
+        logging.debug(
+            f"Creating drill from deck {deck.name}, category {str(category)}"
+        )
+        logging.debug(f"reversed: {str(isReversed)}")
+        logging.debug(f"using-spaced-repetition: {str(usingSpacedRep)}")
+
         drill = Drill([])
 
         if usingSpacedRep:
@@ -83,6 +90,8 @@ class Drill:
             termTotal = 0
             for n in range(0, 6):
                 termTotal += len(binTerms[n])
+
+            logging.debug(f"Available terms: {termTotal}")
 
             # print(f"  termTotal: {termTotal}")
             if questionCount > termTotal:
@@ -152,12 +161,15 @@ class Drill:
                         binCounts[shiftToIndex] + shortage
                     )
 
-            # print("  FINAL COUNTS FROM EACH BIN:")
-            # for n in range(0, 6):
-            #    print(f"  bin[{n}]: {binCounts[n]} from {len(binTerms[n])} available.")
+            logging.debug("  FINAL COUNTS FROM EACH BIN:")
+            for n in range(0, 6):
+                logging.debug(
+                    f"  bin[{n}]: {binCounts[n]} from {len(binTerms[n])} available."
+                )
 
             # print("  making random term selections...")
             # now we are ready to randomly select terms from each bin
+
             drill.terms = []
             for n in range(0, 6):
                 thisBinCount = binCounts[n]
@@ -166,6 +178,7 @@ class Drill:
                     indexSet = set()
                     while len(indexSet) < thisBinCount:
                         indexSet.add(random.randint(0, len(thisBinTerms) - 1))
+                    logging.debug(f"Index set for bin {n}: {str(indexSet)}")
                     for index in indexSet:
                         drill.terms.append(thisBinTerms[index])
                 else:

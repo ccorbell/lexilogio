@@ -157,8 +157,38 @@ class Controller:
 
     def saveUpdatedDrillTerms(self):
         updatedTerms = self.drill.getUpdatedTerms()
-
+        logging.debug(f"Saving {len(updatedTerms)} updated terms...")
         if len(updatedTerms) > 0:
             self.database.updateTermBins(
                 self.deck, updatedTerms, self.deck.isReversedDrill()
             )
+
+    # -------------------------------------- Import and Export
+    def exportTermsToPath(self, filePath, category: Category = None):
+        self.reloadDeck()
+        termList = None
+
+        categoryList = []
+        if None == category:
+            categoryList = self.deck.categories
+        else:
+            categoryList = [category]
+
+        logging.debug(
+            f"Exporting terms for categories {categoryList} to file {filePath}..."
+        )
+        exportText = ""
+        for exportCat in categoryList:
+            exportText += f"# category={exportCat.name}\n"
+            termList = self.deck.getTermsInCategory(exportCat)
+            for term in termList:
+                exportText += f"{term.question}: {term.answer}\n"
+
+        # TODO: also export terms with no category?
+        with open(filePath, "w") as exportFileObj:
+            exportFileObj.write(exportText)
+
+        if os.path.isfile(filePath):
+            print("Export complete.")
+        else:
+            print("UNEXPECTED ERROR: filed to write file.")

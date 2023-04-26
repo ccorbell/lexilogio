@@ -51,6 +51,10 @@ class Deck:
         return self.prefs[Deck.PREFSKEY_SPACED_BIN_DISTRIBUTION]
 
     # utilities for filtering terms
+
+    def getAllTerms(self):
+        return self.terms
+
     def getTermsInCategory(self, category: Category):
         return [t for t in self.terms if t.category == category.pkey]
 

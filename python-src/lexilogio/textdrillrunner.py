@@ -27,6 +27,7 @@ ARG_WEIGHTED = "weighted"
 ARG_BINS = "bins"
 ARG_COUNT = "count"
 ARG_FILE = "file"
+ARG_LOGLEVEL = "loglevel"
 
 CMD_IMPORT = "import"
 CMD_EXPORT = "export"
@@ -106,6 +107,9 @@ class TextDrillRunner:
         elif choice == "i":
             self.inputMode = INPUT_MODE_import
             self.run_import()
+        elif choice == "e":
+            self.inputMode = INPUT_MODE_export
+            self.run_export()
         elif choice == "a":
             self.inputMode = INPUT_MODE_add
             self.run_add()
@@ -131,6 +135,10 @@ class TextDrillRunner:
 
         # show a category picker
         drillCategory = self.runCategoryPicker()
+        if type(drillCategory) == int and drillCategory == -1:
+            # early exit
+            self.inputMode = INPUT_MODE_mainmenu
+            return
 
         # build drill from params
         print("\nCreating drill...")
@@ -154,6 +162,11 @@ class TextDrillRunner:
         self.inputMode = INPUT_MODE_question
 
     def runCategoryPicker(self, prompt="Categories:"):
+        """
+        Prompt for user selection of a category. If wildcard or empty
+        selection is made, return None. If 'x' is entered to exit,
+        return -1. Otherwise, return the chosen Category object.
+        """
         chosenCategory = None
 
         categoryPickerText = "{prompt}\n  (*) (all categories)\n"
@@ -172,7 +185,10 @@ class TextDrillRunner:
             chosenKey = (
                 input("Enter letter for category, x to exit: ").strip().lower()
             )
-            if chosenKey == "*" or chosenKey == "x" or len(chosenKey) == 0:
+            if chosenKey == "x":
+                chosenCategory = -1
+                break
+            elif chosenKey == "*" or len(chosenKey) == 0:
                 chosenCategory = None
                 break
             elif not chosenKey in catPickerD:
@@ -241,7 +257,29 @@ class TextDrillRunner:
         self.inputMode = INPUT_MODE_mainmenu
 
     def run_export(self):
-        print("Export not yet implemented...")
+        category = self.runCategoryPicker("Select category to export:")
+        if type(category) == int and category == -1:
+            # cancel export
+            self.inputMode = INPUT_MODE_mainmenu
+            return
+
+        filePath = None
+        while None == filePath:
+            filePath = input("Enter file path for export (x to exit):")
+            if "x" == filePath:
+                # cancel export
+                self.inputMode = INPUT_MODE_mainmenu
+                filePath = None
+                break
+
+            if os.path.exists(filePath):
+                print(f"An file or folder already exists at path {filePath}.")
+                filePath = None
+                break
+
+            self.controller.exportTermsToPath(filePath, category)
+
+        self.inputMode = INPUT_MODE_mainmenu
 
     def run_prefs(self):
 
@@ -648,6 +686,8 @@ class TextDrillRunner:
         foundImportCmd = False
         foundExportCmd = False
 
+        logLevelStr = "ERROR"
+
         for arg in argv:
 
             if arg.strip() == CMD_IMPORT:
@@ -665,6 +705,25 @@ class TextDrillRunner:
             elif arg.startswith(f"{ARG_FILE}="):
                 fileArg = arg[len(ARG_FILE) + 1 :]
 
+            elif arg.startswith(f"{ARG_LOGLEVEL}="):
+                logLevelStr = arg[len(ARG_LOGLEVEL) + 1 :].strip().upper()
+
+        # Configure stdout logging
+        # TODO also support file logging?
+        root = logging.getLogger()
+        root.setLevel(logLevelStr)
+
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setLevel(logLevelStr)
+        formatter = logging.Formatter("%(levelname)s: %(message)s")
+        handler.setFormatter(formatter)
+        root.addHandler(handler)
+
+        # test logging
+        logging.debug("Testing debug logging...")
+        logging.info("Testing info logging...")
+        logging.error("Testing error logging...")
+
         runner = TextDrillRunner()
         runner.initialize(dataDir, deckName)
 
@@ -676,7 +735,7 @@ class TextDrillRunner:
             if runner.do_file_import(fileArg):
                 return
             else:
-                print("Failed to import anything from {fileArg}")
+                logging.warning("Failed to import anything from {fileArg}")
                 sys.exit(1)
 
         if foundExportCmd:
@@ -694,31 +753,5 @@ class TextDrillRunner:
             runner.run_input()
 
 
-def importAllGreekFiles():
-    adjFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-adjectives-master.txt"
-    advFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-adverbs-master.txt"
-    conjFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-conjunctions-master.txt"
-    nounFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-nouns-master.txt"
-    prepFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-prepositions-master.txt"
-    phraseFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-phrases-master.txt"
-    pronounFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-pronouns-master.txt"
-    verbsFile = "/Users/mathaes/Documents/Research/Έλληνικα/flashy/greek-verbs-master.txt"
-
-    importFiles = [
-        adjFile,
-        advFile,
-        conjFile,
-        nounFile,
-        prepFile,
-        phraseFile,
-        pronounFile,
-        verbsFile,
-    ]
-    for impFile in importFiles:
-        TextDrillRunner.main(["deck=el_en", "import", f"file={impFile}"])
-
-
 if __name__ == "__main__":
-    print("DEBUG running TextDrillRunner.main()...")
-    TextDrillRunner.main(["deck=el_en"])
-    # TextDrillRunner.main(sys.argv)
+    TextDrillRunner.main(sys.argv)

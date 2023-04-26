@@ -8,6 +8,7 @@ Created on Sun Apr  9 00:01:09 2023
 import os
 import sqlite3
 from datetime import datetime
+import logging
 
 from .deck import Deck
 from .term import Term
@@ -271,7 +272,9 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
 
             params.append((term.pkey))
 
-            # print(f"DEBUG - executing updateSql {updateSql} with params {params}")
+            logging.debug(
+                f"executing updateSql {updateSql} with params {params}"
+            )
             cur.execute(updateSql, params)
 
         con.commit()
