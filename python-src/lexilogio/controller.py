@@ -14,6 +14,7 @@ from lexilogio.deckdatabase import DeckDatabase
 from lexilogio.deck import Deck
 from lexilogio.drill import Drill
 from lexilogio.tag import Tag
+from lexilogio.term import Term
 
 
 class ControllerClient:
@@ -80,6 +81,9 @@ class Controller:
 
     def getCategoryList(self):
         return self.deck.categories
+    
+    def getCategoryByName(self, categoryName):
+        return self.deck.getCategoryByName(categoryName)
 
     def addNewCategory(self, categoryName):
         newCat = self.database.insertDeckCategory(self.deck, categoryName)
@@ -185,6 +189,8 @@ class Controller:
         for exportCat in categoryList:
             exportText += f"# category={exportCat.name}\n"
             termList = self.deck.getTermsInCategory(exportCat)
+            termList.sort(key=Term.questionSort)
+
             for term in termList:
                 exportText += f"{term.question}: {term.answer}\n"
 

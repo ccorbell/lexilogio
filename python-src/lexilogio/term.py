@@ -18,3 +18,5 @@ class Term:
         self.lastDrillTime = None
         self.updated = False
 
+    def questionSort(term):
+        return term.question

@@ -281,6 +281,21 @@ class TextDrillRunner:
             self.controller.exportTermsToPath(filePath, category)
 
         self.inputMode = INPUT_MODE_mainmenu
+        
+    def do_file_export(self, filePath, categoryName):
+        if os.path.exists(filePath):
+            print("ERROR: file already exists at {filePath}")
+            return False
+        
+        category = None
+        if not None == categoryName:
+            category = self.controller.getCategoryByName(categoryName)
+            if None == category:
+                print("Error: no category found with name \"{}\"")
+                return False
+        
+        self.controller.exportTermsToPath(filePath, category)
+        return os.path.isfile(filePath)
 
     def run_prefs(self):
 
@@ -545,10 +560,6 @@ class TextDrillRunner:
             print("No terms found to import in file {filePath}")
             return False
 
-    def do_file_export(self, filePath):
-        print("File export not yet implemented")
-        return False
-
     def show_setup_menu(self):
         print("legilogio")
         print("---------")
@@ -720,6 +731,8 @@ class TextDrillRunner:
         deckName = "el_en"  # default
 
         fileArg = None
+        
+        categoryArg = None
 
         foundImportCmd = False
         foundExportCmd = False
@@ -742,6 +755,11 @@ class TextDrillRunner:
 
             elif arg.startswith(f"{ARG_FILE}="):
                 fileArg = arg[len(ARG_FILE) + 1 :]
+                print(f"DEBUG got fileArg: {fileArg}")
+                
+            elif arg.startswith(f"{ARG_CATEGORY}="):
+                categoryArg = arg[len(ARG_CATEGORY) + 1 :]
+                print(f"DEBUG got categoryArg: {categoryArg}")
 
             elif arg.startswith(f"{ARG_LOGLEVEL}="):
                 logLevelStr = arg[len(ARG_LOGLEVEL) + 1 :].strip().upper()
@@ -781,9 +799,10 @@ class TextDrillRunner:
                 print("ERROR: export command requires file=PATH parameter")
                 sys.exit(1)
             runner.inputMode = INPUT_MODE_batchcmd
-            if runner.do_file_export(fileArg):
+            if runner.do_file_export(fileArg, categoryArg):
                 return
             else:
+                logging.warning("Failed to export terms.")
                 sys.exit(1)
 
         runner.inputMode = INPUT_MODE_mainmenu
