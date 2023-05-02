@@ -134,16 +134,32 @@ class TextDrillRunner:
     def prepare_and_run_drill(self):
         self.controller.reloadDeck()
 
-        # show a category picker
-        drillCategory = self.runCategoryPicker()
-        if type(drillCategory) == int and drillCategory == -1:
-            # early exit
+        drillTag = None
+        drillCategory = None
+        earlyExit = False
+        
+        typeChoice = input("Enter drill type: (c) category, (t) tag, (a or return) all terms: ").strip().lower()
+        
+        if typeChoice == 'c':
+            # show a category picker
+            drillCategory = self.runCategoryPicker()
+            if type(drillCategory) == int and drillCategory == -1:
+                earlyExit = True
+        elif typeChoice == 't':
+            # show a tag picker
+            drillTag = self.runTagPicker()
+            if type(drillTag) == int and drillTag == -1:
+                earlyExit = True
+        elif typeChoice == 'x':
+            earlyExit = True
+            
+        if earlyExit:
             self.inputMode = INPUT_MODE_mainmenu
             return
-
+        
         # build drill from params
         print("\nCreating drill...")
-        self.controller.makeNewDrill(category=drillCategory)
+        self.controller.makeNewDrill(category=drillCategory, tag=drillTag)
         self.drill = self.controller.drill
 
         if None == self.drill:
@@ -200,6 +216,97 @@ class TextDrillRunner:
 
         return chosenCategory
 
+    def runTagPicker(self, prompt="Tags:"):
+        """
+        Prompt for user selection of a tag. If wildcard or empty
+        selection is made, return None. If 'x' is entered to exit,
+        return -1. Otherwise, return the chosen Tag object.
+        """
+        chosenTag = None
+
+        tagPickerText = "{prompt}\n"
+        tags = self.controller.getTagsList()
+
+        tagPickerD = {}
+        n = 0
+        for tagObj in tags:
+            alphaKey = string.ascii_lowercase[n]
+            tagPickerD[alphaKey] = tagObj
+            tagPickerText += f"  ({alphaKey}) {tagObj.name}\n"
+            n = n + 1
+
+        while None == chosenTag:
+            print(tagPickerText)
+            chosenKey = (
+                input("Enter letter for tag, x to exit: ").strip().lower()
+            )
+            if chosenKey == "x":
+                chosenTag = -1
+                break
+            elif not chosenKey in tagPickerD:
+                print(f"Invalid choice '{chosenKey}'")
+                chosenKey = None
+            else:
+                chosenTag = tagPickerD[chosenKey]
+
+        return chosenTag
+
+    
+
+    def run_apply_tag_to_term(self):
+        term = self.controller.currentDrillTerm()
+        doneTagging = False
+
+        while not doneTagging:
+            # choose tag
+            tagPickerList = ""
+            tagD = {}
+            tags = self.controller.getTagsList()
+            n = 0
+            for tag in tags:
+                alphaKey = string.ascii_lowercase[n]
+                tagD[alphaKey] = tag
+                tagPickerList += f"  ({alphaKey}) {tag.name}\n"
+                n = n + 1
+            print(tagPickerList)
+
+            chosenTag = None
+            while None == chosenTag:
+                chosenKey = input(
+                    "Enter tag, + to add a new tag, x to exit: "
+                ).strip()
+                print(f"chosenKey: {chosenKey}")
+                
+                if chosenKey in tagD:
+                    chosenTag = tagD[chosenKey]
+                    print(f" - applying tag {chosenTag.name} to term.")
+                    self.controller.applyTagToTerm(chosenTag, term)
+                elif chosenKey == "+":
+                    newTag = None
+                    while newTag == None:
+                        newTagName = input("New tag name: ").strip()
+                        if len(newTagName) == 0:
+                            continue
+                        elif newTagName in tagD:
+                            print(f'  tag "{newTagName}" already exists.')
+                        else:
+                            chosenTag = self.controller.addTag(newTagName)
+                            print(
+                                f" - added tag {newTagName}, applying to term."
+                            )
+                            self.controller.applyTagToTerm(chosenTag, term)
+                elif chosenKey == "x":
+                    return
+                else:
+                    print("Unrecognized choice '{chosenKey}'")
+
+                if chosenTag:
+                    yn = input("Apply another tag? (y/n) ").strip().lower()
+                    doneTagging = yn.startswith("n")
+                    if not doneTagging:
+                        chosenTag = None
+            
+
     def run_drill_question_input(self):
         term = self.controller.currentDrillTerm()
 
@@ -212,6 +319,8 @@ class TextDrillRunner:
         if ret == "x":
             self.end_drill()
             return
+        elif ret == "t":
+            self.run_apply_tag_to_term()
 
         self.inputMode = INPUT_MODE_response
 
@@ -229,7 +338,8 @@ class TextDrillRunner:
                 self.end_drill()
                 return
             if rating == "t":
-                print("term tagging not yet implemented - coming soon!...")
+                self.run_apply_tag_to_term()
+                rating = 0
                 continue
             try:
                 rating = int(rating)
@@ -281,19 +391,19 @@ class TextDrillRunner:
             self.controller.exportTermsToPath(filePath, category)
 
         self.inputMode = INPUT_MODE_mainmenu
-        
+
     def do_file_export(self, filePath, categoryName):
         if os.path.exists(filePath):
             print("ERROR: file already exists at {filePath}")
             return False
-        
+
         category = None
         if not None == categoryName:
             category = self.controller.getCategoryByName(categoryName)
             if None == category:
-                print("Error: no category found with name \"{}\"")
+                print('Error: no category found with name "{}"')
                 return False
-        
+
         self.controller.exportTermsToPath(filePath, category)
         return os.path.isfile(filePath)
 
@@ -731,7 +841,7 @@ class TextDrillRunner:
         deckName = "el_en"  # default
 
         fileArg = None
-        
+
         categoryArg = None
 
         foundImportCmd = False
@@ -756,7 +866,7 @@ class TextDrillRunner:
             elif arg.startswith(f"{ARG_FILE}="):
                 fileArg = arg[len(ARG_FILE) + 1 :]
                 print(f"DEBUG got fileArg: {fileArg}")
-                
+
             elif arg.startswith(f"{ARG_CATEGORY}="):
                 categoryArg = arg[len(ARG_CATEGORY) + 1 :]
                 print(f"DEBUG got categoryArg: {categoryArg}")

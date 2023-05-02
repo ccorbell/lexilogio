@@ -106,6 +106,9 @@ class Controller:
         newTag = self.database.insertDeckTag(self.deck, tagName)
         self.deck.tags.append(newTag)
         return newTag
+    
+    def applyTagToTerm(self, tag:Tag, term:Term):
+        self.database.applyTagToTerm(self.deck, term, tag)
 
     def deleteTag(self, tag: Tag):
         self.database.deleteDeckTag(self.deck, tag)
@@ -147,8 +150,8 @@ class Controller:
 
     # -------------------------------------- Drill
 
-    def makeNewDrill(self, category: Category = None):
-        self.drill = Drill.makeDrillFromDeck(deck=self.deck, category=category)
+    def makeNewDrill(self, category: Category = None, tag: Tag = None):
+        self.drill = Drill.makeDrillFromDeck(deck=self.deck, category=category, tag=tag)
         # TODO notify that drill was created successfull
 
     def currentDrillTerm(self):

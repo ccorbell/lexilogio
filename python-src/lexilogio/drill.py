@@ -13,6 +13,7 @@ import logging
 
 from lexilogio.deck import Deck
 from lexilogio.category import Category
+from lexilogio.tag import Tag
 
 
 class Drill:
@@ -51,7 +52,21 @@ class Drill:
         return [t for t in self.terms if t.updated]
 
     # Drill construction methods
-    def makeDrillFromDeck(deck: Deck, category: Category = None):
+    def makeDrillFromDeck(deck: Deck, category: Category = None, tag: Tag = None):
+        """
+        Create a new drill.
+        
+        If category and tag or both nil, create a drill from all deck terms.
+        
+        Note that only *one* of category or tag can currently be non-nil
+        (drills by tag within a category are TBD).
+        
+        """
+        usingCategory = not None == category
+        usingTag = not None == tag
+        if usingCategory and usingTag:
+            raise Exception("ERROR: a drill can specify a category or a tag, not both")
+            
         questionCount = deck.getDrillQuestionCount()
         usingSpacedRep = deck.isUsingSpacedRepetition()
         isReversed = deck.isReversedDrill()
@@ -67,24 +82,15 @@ class Drill:
         if usingSpacedRep:
 
             binTerms = {}
-            binTerms[0] = deck.getTermsInCategoryOfBinValue(
-                category, 0, isReversed
-            )
-            binTerms[1] = deck.getTermsInCategoryOfBinValue(
-                category, 1, isReversed
-            )
-            binTerms[2] = deck.getTermsInCategoryOfBinValue(
-                category, 2, isReversed
-            )
-            binTerms[3] = deck.getTermsInCategoryOfBinValue(
-                category, 3, isReversed
-            )
-            binTerms[4] = deck.getTermsInCategoryOfBinValue(
-                category, 4, isReversed
-            )
-            binTerms[5] = deck.getTermsInCategoryOfBinValue(
-                category, 5, isReversed
-            )
+            for n in range(0, 6):
+                if not usingTag:
+                    binTerms[n] = deck.getTermsInCategoryOfBinValue(
+                        category, n, isReversed
+                    )
+                else:
+                    binTerms[n] = deck.getTermsWithTagOfBinValue(
+                        tag, n, isReversed
+                    )
 
             # sanity-check: do we even have enough terms for desired questionCount?
             termTotal = 0
@@ -93,6 +99,10 @@ class Drill:
 
             logging.debug(f"Available terms: {termTotal}")
 
+            if termTotal == 0:
+                print("  no matching terms available; add or input terms to run a drill.")
+                return None
+            
             # print(f"  termTotal: {termTotal}")
             if questionCount > termTotal:
                 questionCount = termTotal
@@ -180,7 +190,7 @@ class Drill:
 
             # print("  making random term selections...")
             # now we are ready to randomly select terms from each bin
-
+            random.seed()
             drill.terms = []
             for n in range(0, 6):
                 thisBinCount = binCounts[n]
@@ -202,18 +212,21 @@ class Drill:
 
         else:  # not using spaced rep from bins, just random from all terms
             sourceTerms = []
-            if None == category:
-                sourceTerms.deck.terms
-            else:
+            if usingCategory:
                 sourceTerms = deck.getTermsInCategory(category)
+            elif usingTag:
+                sourceTerms = deck.getTermsWithTag(tag)
+            else:
+                sourceTerms.deck.terms
 
             if len(sourceTerms) == 0:
-                print('No terms of category "{category.name}" available!')
+                print('No terms !')
                 return None
 
             if questionCount > len(sourceTerms):
                 questionCount = len(sourceTerms)
 
+            random.seed()
             drill.terms = []
             if questionCount < len(sourceTerms):
                 indexSet = set()

@@ -7,7 +7,7 @@ Created on Sat Apr  8 23:55:23 2023
 """
 
 from lexilogio.category import Category
-
+from lexilogio.tag import Tag
 
 class Deck:
     PREFSKEY_QUESTION_COUNT = "question.count"
@@ -76,6 +76,25 @@ class Deck:
                 for t in self.terms
                 if t.category == category.pkey and t.bin == binValue
             ]
+        
+    def getTermsWithTag(self, tag: Tag):
+        if tag.pkey in self.tagToTerms:
+            termPKs = self.tagToTerms[tag.pkey]
+            return [t for t in self.terms if t.pkey in termPKs]
+        return []
+    
+    def getTermsWithTagOfBinValue(self, tag: Tag, binValue, reversedBin):
+        if None == tag:
+            return self.getTermsFromBin(binValue, reversedBin)
+        
+        tagTerms = self.getTermsWithTag(tag)
+        if len(tagTerms) == 0:
+            return tagTerms
+    
+        if reversedBin:
+            return [t for t in tagTerms if t.reversedBin == binValue]
+        else:
+            return [t for t in tagTerms if t.bin == binValue]
 
     def getTermsFromBin(self, binValue, reversedBin):
         if reversedBin:
