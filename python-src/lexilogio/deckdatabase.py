@@ -25,6 +25,7 @@ DECK_TERMS_COLUMN_NAMES = [
     "bin",
     "reversed_bin",
     "last_drill_time",
+    "has_paper_card"
 ]
 
 CATEGORY_TABLE_NAME = "deck_categories"

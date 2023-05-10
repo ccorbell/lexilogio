@@ -108,6 +108,13 @@ class Controller:
         return newTag
     
     def applyTagToTerm(self, tag:Tag, term:Term):
+        # avoid re-applying an already applied tag
+        if term.pkey in self.deck.termToTags:
+            curTagPKs = self.deck.termToTags[term.pkey]
+            if tag.pkey in curTagPKs:   
+                logging.warning("Tag {tag.name} already applied to term, skipping.")
+                return
+
         self.database.applyTagToTerm(self.deck, term, tag)
 
     def deleteTag(self, tag: Tag):

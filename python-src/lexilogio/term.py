@@ -17,6 +17,7 @@ class Term:
         self.reversedBin = 0
         self.lastDrillTime = None
         self.updated = False
+        self.hasPaperCard = False
 
     def questionSort(term):
         return term.question

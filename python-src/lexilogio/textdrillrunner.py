@@ -618,9 +618,9 @@ class TextDrillRunner:
             print("ERROR: failed to read any lines from file.")
             return
 
-        print(
-            f"DEBUG - number of lines read from import file: {len(importLines)}"
-        )
+        #print(
+        #    f"DEBUG - number of lines read from import file: {len(importLines)}"
+        #)
 
         newTerms = []
 
@@ -847,7 +847,7 @@ class TextDrillRunner:
         foundImportCmd = False
         foundExportCmd = False
 
-        logLevelStr = "DEBUG"
+        logLevelStr = "INFO"
 
         for arg in argv:
 
@@ -865,11 +865,11 @@ class TextDrillRunner:
 
             elif arg.startswith(f"{ARG_FILE}="):
                 fileArg = arg[len(ARG_FILE) + 1 :]
-                print(f"DEBUG got fileArg: {fileArg}")
+                #print(f"DEBUG got fileArg: {fileArg}")
 
             elif arg.startswith(f"{ARG_CATEGORY}="):
                 categoryArg = arg[len(ARG_CATEGORY) + 1 :]
-                print(f"DEBUG got categoryArg: {categoryArg}")
+                #print(f"DEBUG got categoryArg: {categoryArg}")
 
             elif arg.startswith(f"{ARG_LOGLEVEL}="):
                 logLevelStr = arg[len(ARG_LOGLEVEL) + 1 :].strip().upper()
