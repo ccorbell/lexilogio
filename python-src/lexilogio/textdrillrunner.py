@@ -13,10 +13,8 @@ import string
 import logging
 import copy
 
-from lexilogio.deckdatabase import DeckDatabase
+from lexilogio.deckdatabase import QueryCriterion
 from lexilogio.term import Term
-from lexilogio.drill import Drill
-from lexilogio.deck import Deck
 from lexilogio.version import LEXILOGIO_PRODUCT_VERSION_STR
 
 from lexilogio.controller import Controller
@@ -46,6 +44,8 @@ INPUT_MODE_add = 20
 INPUT_MODE_categories = 30
 
 INPUT_MODE_tags = 40
+
+INPUT_MODE_manageTerms = 50
 
 INPUT_MODE_preferences = 99
 
@@ -126,6 +126,10 @@ class TextDrillRunner:
             self.inputMode = INPUT_MODE_tags
             self.run_tags_edit()  # has its own input loop
             self.inputMode = INPUT_MODE_mainmenu
+        elif choice == "m":
+            self.inputMode = INPUT_MODE_manageTerms
+            self.run_manage_terms()
+            self.inputMode = INPUT_MODE_mainmenu
         elif choice == "x":
             sys.exit(0)
         else:
@@ -186,7 +190,7 @@ class TextDrillRunner:
         """
         chosenCategory = None
 
-        categoryPickerText = "{prompt}\n  (*) (all categories)\n"
+        categoryPickerText = f"{prompt}\n  (*) (all categories)\n"
         categories = self.controller.getCategoryList()
 
         catPickerD = {}
@@ -224,7 +228,7 @@ class TextDrillRunner:
         """
         chosenTag = None
 
-        tagPickerText = "{prompt}\n"
+        tagPickerText = f"{prompt}\n"
         tags = self.controller.getTagsList()
 
         tagPickerD = {}
@@ -367,6 +371,122 @@ class TextDrillRunner:
         self.controller.saveUpdatedDrillTerms()
         self.inputMode = INPUT_MODE_mainmenu
 
+    def run_manage_terms(self):
+        print("============")
+        print("Manage terms")
+        print("============")
+        print("This mode lets you query for terms by a variety of criteria")
+        print("and modify or delete terms by referencing their id values.")
+        
+        exit_manage_terms = False
+        
+        while not exit_manage_terms:
+            print(" menu:")
+            print("   q - query for terms")
+            print("   e - edit term")
+            print("   t - tag term")
+            print("   d - delete term")
+            print("   x - exit term manager")
+            choice = input(" > ").strip().lower()
+            
+            if choice == 'q':
+                self.query_for_manage_terms()
+            elif choice == 'e':
+                self.manage_terms_editor()
+            elif choice == 't':
+                self.tag_for_manage_terms()
+            elif choice == 'd':
+                self.delete_for_manage_terms()
+            elif choice == 'x':
+                exit_manage_terms = True
+                print("DEBUG - exiting term manager...")
+                return
+        
+        
+    def query_for_manage_terms(self):
+        query = []
+        building_query = True
+        while building_query:
+            print(f" Current query: {query}")
+            print("   c - add category")
+            print("   t - add tag")
+            print("   q - add question")
+            print("   a - add answer")
+            print("   0 - reset query")
+            print("   x - exit (cancel query)")
+            print(" Or hit return to run query")
+            choice = input("> ").strip().lower()
+            
+            if choice == "":
+                break
+            
+            if choice == 'c':
+                cat = self.runCategoryPicker("Choose category:")
+                if None == cat:
+                    continue
+                elif type(cat) == int and cat == -1:
+                    continue
+                else:
+                    query.append( QueryCriterion.category(cat) )
+                    
+            elif choice == 't':
+                tag = self.runTagPicker("Choose tag:")
+                if None == tag:
+                    print("...no tag selected, ignoring.")
+                    continue
+                elif type(tag) == int and cat == -1:
+                    print("...no tag selected, ignoring.")
+                    continue
+                else:
+                    query.append( QueryCriterion.tag(tag) )
+                
+            elif choice == "q":
+                questionText = input("Enter question text; use * for wildcard, x to cancel: ").strip()
+                if len(questionText) > 0:
+                    if questionText == 'x':
+                        continue
+                    
+                    query.append( QueryCriterion.question(questionText) )
+            
+            elif choice == "a":
+                answerText = input("Enter answer text; use * for wildcard, x to cancel: ").strip()
+                if len(answerText) > 0:
+                    if answerText == 'x':
+                        continue
+                    
+                    query.append( QueryCriterion.answer(answerText) )
+                    
+            elif choice == '0':
+                query = []
+                print("Query reset.")
+                continue
+            
+            elif choice == 'x':
+                building_query = False
+                print("Query canceled.")
+                return
+                
+        results = self.controller.query(query)
+        print("Query results:")
+        if None == results or len(results) == 0:
+            print("None")
+        else:
+            print("[ID] question: answer")
+            print("---- --------  ------")
+            for result in results:
+                print(f"[{result.pkey}] {result.question}: {result.answer}")
+    
+    def manage_terms_editor(self):
+        termId = input("ID of term to edit: ")
+        pass
+    
+    def tag_for_manage_terms(self):
+        pass
+        
+    def delete_for_manage_terms(self):
+        termId = input("ID of term to delete: ")
+        pass
+        
     def run_export(self):
         category = self.runCategoryPicker("Select category to export:")
         if type(category) == int and category == -1:

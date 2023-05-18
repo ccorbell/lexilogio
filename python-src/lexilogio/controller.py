@@ -122,6 +122,9 @@ class Controller:
 
     def addNewTerms(self, newTermList):
         self.database.insertTerms(self.deck, newTermList)
+        
+    def query(self, queryCriteriaList):
+        return self.database.queryByCriteria(self.deck, queryCriteriaList)
 
     # -------------------------------------- Deck Preferences
     def reloadPrefs(self):

@@ -38,6 +38,38 @@ INSERT_DEFAULT_PREFS_SQL = f"""INSERT INTO {PREFS_TABLE_NAME} (
     25, 1, 0);
 """
 
+class QueryCriterion:
+    CATEGORY = "category:"
+    TAG = "tag:"
+    QUESTION = "question:"
+    ANSWER = "answer:"
+    
+    CRITERION_TYPES = [CATEGORY, TAG, QUESTION, ANSWER]
+    
+    def __init__(self, criterionType, value):
+        if not criterionType in QueryCriterion.CRITERION_TYPES:
+            raise Exception(f"Unsupported criterion type: {criterionType}")
+            
+        self.criterionType = criterionType
+        self.value = value
+        
+    def __repr__(self):
+        return f"({self.criterionType} {self.value})"
+    
+    # factory methods
+    def category(value):
+        return QueryCriterion(QueryCriterion.CATEGORY, value)
+    
+    def tag(value):
+        return QueryCriterion(QueryCriterion.TAG, value)
+    
+    def question(value):
+        return QueryCriterion(QueryCriterion.QUESTION, value)
+    
+    def answer(value):
+        return QueryCriterion(QueryCriterion.ANSWER, value)
+    
+
 
 class DeckDatabase:
     def fileNameForDeckName(deckName):
@@ -150,7 +182,124 @@ class DeckDatabase:
         termResults = cur.fetchall()
 
         return DeckDatabase.queryResultsToTermArray(termResults)
+    
+    def queryByCriteria(self, deck: Deck, queryCriteriaList):
+        """
+        Query the database for terms based on a list of criteria.
+        Multiple criteria of the same type are treated as OR clauses.
+        For example if two categories are in the criteria, this query
+        will match either. Criteria from different categores are treated
+        as AND clauses. For instance if there is a category criterion and
+        a tag criterion, the results will be terms that match both.
+        """
+        columnNamesCommaStr = ",".join(DECK_TERMS_COLUMN_NAMES)
+        querySQL = (
+            f"SELECT {columnNamesCommaStr} FROM {DECK_TERMS_TABLE_NAME}"
+        )
+        whereClauses = []
+        whereClauseSQL = ""
+        
+        params = []
+        
+        tagCriteria = None
+        
+        if len(queryCriteriaList) > 0:
+            
+            catCriteria = list(filter(lambda cr: cr.criterionType == QueryCriterion.CATEGORY, queryCriteriaList))
+            questionCriteria = list(filter(lambda cr: cr.criterionType == QueryCriterion.QUESTION, queryCriteriaList))
+            answerCriteria = list(filter(lambda cr: cr.criterionType == QueryCriterion.ANSWER, queryCriteriaList))
+            
+            numWhereCriteria = len(catCriteria) + len(questionCriteria) + len(answerCriteria)
+            
+            tagCriteria = list(filter(lambda cr: cr.criterionType == QueryCriterion.TAG, queryCriteriaList))
 
+            if numWhereCriteria > 0:
+                whereClauseSQL = " WHERE "
+                
+            if len(catCriteria) == 1:
+                whereClauses.append("category = ?")
+                params.append(catCriteria[0].value.pkey)
+            elif len(catCriteria) > 1:
+                catClause = ""
+                for n in range(0, len(catCriteria)):
+                    catClause += "category = ?"
+                    params.append(catCriteria[n].value.pkey)
+                    if n + 1 < len(catCriteria):
+                        catClause += " OR "
+                whereClauses.append(catClause)
+                
+            if len(questionCriteria) == 1:
+                whereClauses.append("question LIKE ?")
+            
+                params.append(questionCriteria[0].value.replace('*', '%'))
+            elif len(questionCriteria) > 1:
+                questionClause = ""
+                for n in range(0, len(questionCriteria)):
+                    questionClause += "question LIKE ?"
+                    params.append(questionCriteria[n].value.replace('*', '%'))
+                    if n + 1 < len(questionCriteria):
+                        questionClause += " OR "
+                whereClauses.append(questionClause)
+                
+            if len(answerCriteria) == 1:
+                whereClauses.append("answer LIKE ?")
+            
+                params.append(answerCriteria[0].value.replace('*', '%'))
+            elif len(answerCriteria) > 1:
+                answerClause = ""
+                for n in range(0, len(answerClause)):
+                    answerClause += "answer LIKE ?"
+                    params.append(answerCriteria[n].value.replace('*', '%'))
+                    if n + 1 < len(answerCriteria):
+                        answerClause += " OR "
+                whereClauses.append(answerClause)
+                
+            print(f"DEBUG: whereClauses: {whereClauses}")
+            # TODO: tags - as JOIN clause, or just post-process filtering step?
+            if len(whereClauses) == 1:
+                whereClauseSQL += whereClauses[0]
+            else: 
+                for wcIndex in range(0, len(whereClauses)):
+                    whereClauseSQL += f"({whereClauses[wcIndex]})"
+                    if wcIndex + 1 < len(whereClauses):
+                        whereClauseSQL += " AND "
+                    
+        
+        if len(whereClauseSQL) > 0:
+            querySQL += whereClauseSQL
+        querySQL += ";"
+            
+        con = self.getDbConnection()
+        cur = con.cursor()
+        
+        print(f"DEBUG - executing SQL: {querySQL}")
+        
+        termResults = None
+        if len(params) == 0:
+            cur.execute(querySQL)
+            termResults = cur.fetchall()
+        else:
+            print(f"DEBUG params:\n  {params}")
+            cur.execute(querySQL, params)
+            termResults = cur.fetchall()
+        if None == termResults or len(termResults) == 0:
+            return []
+        
+        results = DeckDatabase.queryResultsToTermArray(termResults)
+        
+        # TODO - now we filter by tags - probably more expensive than
+        #  join but less complex to implement dynamically
+        if tagCriteria and len(tagCriteria) > 0:
+            taggedTermPKs = []
+            for tagCriterion in tagCriteria:
+                tag = tagCriterion.value
+                taggedTerms = deck.getTermsWithTag(tag)
+                taggedTermPKs.extend(list(map(lambda t: t.pkey, taggedTerms)))
+                
+            results = list(filter(lambda tt: tt.pkey in taggedTermPKs, results))
+                
+        return results
+        
     def queryResultsToTermArray(results):
         terms = []
         for row in results:

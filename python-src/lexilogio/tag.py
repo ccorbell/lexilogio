@@ -11,9 +11,13 @@ class Tag:
     def __init__(self, name="", pkey=None):
         self.name = name
         self.pkey = pkey
+        
+    def __repr__(self):
+        return self.name
 
 
 class TagTermRelation:
     def __init__(self, tag_pkey, term_pkey):
         self.tag_pkey = tag_pkey
         self.term_pkey = term_pkey
+

@@ -11,3 +11,6 @@ class Category:
     def __init__(self, name, pkey=None):
         self.name = name
         self.pkey = pkey
+        
+    def __repr__(self):
+        return self.name
