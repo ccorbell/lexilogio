@@ -103,6 +103,38 @@ class DeckDatabase:
 
         self.readDeckPreferences(deck)
         return deck
+    
+    def readDeckStats(self):
+        
+        COUNT_SQL = f"SELECT COUNT(*) FROM {DECK_TERMS_TABLE_NAME}"
+        BIN_AVG_SQL = f"SELECT AVG(bin) FROM {DECK_TERMS_TABLE_NAME}"
+        RBIN_AVG_SQL = f"SELECT AVG(reversed_bin) FROM {DECK_TERMS_TABLE_NAME}"
+        
+        con = self.getDbConnection()
+        cur = con.cursor()
+        
+        cur.execute(COUNT_SQL, [])
+        count_result = cur.fetchone()
+        
+        cur.execute(BIN_AVG_SQL, [])
+        bin_avg_result = cur.fetchone()
+        
+        cur.execute(RBIN_AVG_SQL, [])
+        rbin_avg_result = cur.fetchone()
+        
+        count = int(count_result[0])
+        bin_avg = float(bin_avg_result[0])
+        rbin_avg = float(rbin_avg_result[0])
+        
+        result_d = {
+            "count": count,
+            "average": bin_avg,
+            "reverse-average": rbin_avg,
+            "score": count * bin_avg,
+            "reverse-score": count * rbin_avg
+        }
+        return result_d
+
 
     def queryForAllDeckTerms(self, deck: Deck):
         self.ensureDeckTablesExist(deck)
@@ -361,33 +393,47 @@ class DeckDatabase:
         if not None == term.lastDrillTime:
             timeSetter = ", last_drill_time = ?"
 
-            updateSql = f""""UDPATE {DECK_TERMS_TABLE_NAME} 
-SET question = ?, answer = ?, category = ?, bin = ?, reversed_bin = ?, tags = ? {timeSetter}
+        updateSql = f"""UPDATE {DECK_TERMS_TABLE_NAME} 
+SET question = ?, answer = ?, category = ?, bin = ?, reversed_bin = ? {timeSetter}
 WHERE pkey = ?;
 """
 
-            tagStr = ""
-            if len(term.tags) > 0:
-                tagStr = ",".join(term.tags)
+        params = [
+            (term.question),
+            (term.answer),
+            (term.category),
+            (term.bin),
+            (term.reversedBin),
+        ]
 
-            params = [
-                (term.question),
-                (term.answer),
-                (term.category),
-                (term.bin),
-                (term.reversedBin),
-                (tagStr),
-            ]
+        if not None == term.lastDrillTime:
+            params.append((term.lastDrillTime))
 
-            if not None == term.lastDrillTime:
-                params.append((term.lastDrillTime))
+        params.append((term.pkey))
 
-            params.append((term.pkey))
-
-            cur.execute(updateSql, params)
+        cur.execute(updateSql, params)
 
         con.commit()
+        
+    def udpateTermCategory(self, deck: Deck, catpk, termpk):
+        con = self.getDbConnection()
+        cur = con.cursor()
+        updateSQL = f"UPDATE {DECK_TERMS_TABLE_NAME} SET category = ? WHERE pkay = ?;"
+        params = [(catpk), (termpk),]
+        cur.execute(updateSQL, params)
+        con.commit()
 
+    def deleteTerm(self, deck: Deck, term: Term):
+        self.ensureDeckTablesExist(deck)
+
+        con = self.getDbConnection()
+        cur = con.cursor()
+        
+        deleteSql = f"DELETE from {DECK_TERMS_TABLE_NAME} WHERE pkey = ?;"
+        params = [(term.pkey),]
+        cur.execute(deleteSql, params)
+        con.commit()
+        
     def updateTermBins(
         self, deck: Deck, termList: list, isReversedDrill=False
     ):
@@ -575,6 +621,15 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
         else:
             deck.tagToTerms[tag.pkey] = [term.pkey]
 
+    def removeTagFromTerm(self, deck: Deck, tag: Tag, term: Term):
+        deleteSQL = f"DELETE FROM {TAG_RELATION_TABLE_NAME} WHERE (term = ? AND tag = ?);"
+        params = [(term.pkey), (tag.pkey),]
+        con = self.getDbConnection()
+        cur = con.cursor()
+
+        cur.execute(deleteSQL, params)
+        con.commit()
+        
     def insertDeckTag(self, deck: Deck, tag_name):
         self.ensureDeckTablesExist(deck)
 
@@ -751,6 +806,7 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
     bin INTEGER DEFAULT 0 NOT NULL,
     reversed_bin INTEGER DEFAULT 0 NOT NULL,
     last_drill_time TEXT DEFAULT NULL,
+    has_paper_card INT DEFAULT 0,
     FOREIGN KEY(category) REFERENCES {CATEGORY_TABLE_NAME}(pkey)
 );
 """

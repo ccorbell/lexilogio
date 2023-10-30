@@ -92,10 +92,22 @@ class TextDrillRunner:
         elif self.inputMode == INPUT_MODE_preferences:
             self.run_prefs()
 
+    def print_stats(self):
+        stats = self.controller.get_stats()
+        score = stats["score"]
+        rev_score = stats["reverse-score"]
+        term_count = stats["count"]
+        avg = "{:.4f}".format(stats["average"])
+        rev_avg = "{:.4f}".format(stats["reverse-average"])
+        
+        print(f"  SCORE: {score}  REVERSE SCORE: {rev_score}")
+        print(f"  ({term_count} terms, {avg} average, {rev_avg} reverse-average)")
+        
     def run_mainmenu_input(self):
         print(f"\n{LEXILOGIO_PRODUCT_VERSION_STR}")
         print("---------")
         print(f"current deck: {self.controller.deck.name}")
+        self.print_stats()
         print("commands:")
         print("  (d) drill         (p) preferences    (a) add card")
         print("  (i) import cards  (e) export cards   (m) manage cards")
@@ -384,8 +396,6 @@ class TextDrillRunner:
             print(" menu:")
             print("   q - query for terms")
             print("   e - edit term")
-            print("   t - tag term")
-            print("   d - delete term")
             print("   x - exit term manager")
             choice = input(" > ").strip().lower()
             
@@ -393,10 +403,6 @@ class TextDrillRunner:
                 self.query_for_manage_terms()
             elif choice == 'e':
                 self.manage_terms_editor()
-            elif choice == 't':
-                self.tag_for_manage_terms()
-            elif choice == 'd':
-                self.delete_for_manage_terms()
             elif choice == 'x':
                 exit_manage_terms = True
                 print("DEBUG - exiting term manager...")
@@ -477,15 +483,113 @@ class TextDrillRunner:
                 print(f"[{result.pkey}] {result.question}: {result.answer}")
     
     def manage_terms_editor(self):
-        termId = input("ID of term to edit: ")
-        pass
-    
-    def tag_for_manage_terms(self):
-        pass
         
-    def delete_for_manage_terms(self):
-        termId = input("ID of term to delete: ")
-        pass
+        exit_term_editor = False
+        while not exit_term_editor:
+            # first the user must choose a term to edit
+            
+            termID = 0
+            term = None
+            
+            while term == None:
+                termIdStr = input("Enter ID of card to edit: ").strip()
+                if len(termIdStr) > 0:
+                    if termIdStr == 'x':
+                        return
+                    
+                    try:
+                        termID = int(termIdStr)
+                    except ValueError:
+                        print(f"ERROR: expected integer, got \"{termIdStr}\"")
+                        
+                    if termID > 0:
+                        print(f"DEBUG: termID is {termID}")
+                        term = self.controller.getTerm(termID)
+                        if None == term:
+                            print(f"No card found with ID {termIdStr}.")
+                     
+            # Now that a card has been selected show edit menu
+            while not term == None:
+                print("Editing card:")
+                print(f"[{term.pkey}] {term.question}: {term.answer}")
+                # get category
+                cat = self.controller.getCategoryByPkey(term.category)
+                print(f"Category: {str(cat)}")
+                tags = self.controller.getTagsForTerm(term)
+                if None == tags or len(tags) == 0:
+                    print("Tags: None")
+                else:
+                    tagNames = list(map(lambda tag: tag.name, tags))
+                    tagCommaStr = ", ".join(tagNames)
+                    print(f"Tags: {tagCommaStr}")
+            
+                print ("  (q) edit question")
+                print ("  (a) edit answer")
+                print ("  (c) change category")
+                print ("  (t) add tag")
+                print ("  (-) remove tag")
+                print ("  (d) delete term")
+                print ("  (x) exit")
+                choice = input("> ").strip().lower()
+                
+                if choice == 'x':
+                    term = None
+                    exit_term_editor = True
+                    break
+                elif choice == 'c':
+                    self.assign_category_for_manage_terms(term)
+                elif choice == 't':
+                    self.tag_for_manage_terms(term)
+                elif choice == '-':
+                    self.tag_for_manage_terms(term, removing=True)
+                elif choice == 'd':
+                    self.delete_for_manage_terms(term)
+                    term = None
+                    break
+                elif choice == 'q' or choice == 'a':
+                    modifying = 'question'
+                    if choice == 'a':
+                        modifying = 'answer'
+                    new_value = input(f"Enter new {modifying}\n> ")
+                    if len(new_value.strip()) == 0:
+                        print("Invalid value.")
+                        continue
+                    yn = input(f"Confirm: set {modifying} to {new_value}?\n(y/n) ").strip().lower()
+                    if not yn.startswith("y"):
+                        print("No change applied.")
+                        continue
+                    if choice == 'q':
+                        term.question = new_value
+                    else:
+                        term.answer = new_value
+                    self.controller.updateTerms([term])
+                elif choice == 'd':
+                    self.delete_for_manage_terms()
+    
+    def tag_for_manage_terms(self, term, removing=False):
+        action = "add"
+        if removing:
+            action = "remove"
+        tag = self.runTagPicker(f"Select the tag {action}: ")
+        if tag is not None and tag != -1:
+            if removing:
+                self.controller.removeTagFromTerm(tag, term)                
+            else:
+                self.controller.applyTagToTerm(tag, term)
+    
+    def assign_category_for_manage_terms(self, term):
+        category = self.runCategoryPicker("Choose a new category: ")
+        if category is not None:
+            self.controller.setCategoryForTerm(category, term)
+        
+    def delete_for_manage_terms(self, term):
+        print("Are you sure you want to delete this term? This cannot be undone.")
+        confirm = input("Enter 'delete' to confirm deletion: ").strip().lowercase()
+        if confirm == "delete":
+            self.controller.deleteTerm(term)
+            print("Term deleted.")
+        else:
+            print("Deletion cancelled.")
         
     def run_export(self):
         category = self.runCategoryPicker("Select category to export:")
@@ -633,6 +737,11 @@ class TextDrillRunner:
         done = False
         cancelled = False
 
+        categories = self.controller.getCategoryList()
+        catLookup = {}
+        for cat in categories:
+            catLookup[cat.name] = cat
+            
         while not (done or cancelled):
 
             print("Adding card (enter x to cancel):")
@@ -653,14 +762,22 @@ class TextDrillRunner:
             else:
                 newTerm.answer = answer.strip()
 
-            # TODO: choose from defined categories?
+            # TODO: runCategoryPicker
             category = input("category: ")
             if category.strip().lower() == "x":
                 cancelled = True
                 break
-            newTerm.category = category.strip()
+            
+            catName = category.strip()
+            if not catName in catLookup:
+                print("ERROR - unknown category: {catName}")
+                cancelled = True
+                break
+            else:
+                newTerm.category = catLookup[catName]
 
-            # TODO: apply a defined tag?
+
+            # TODO: runTagPicker
             tags = input("tags (comma-separated, no spaces): ")
             if tags.strip().lower() == "x":
                 cancelled = True
@@ -679,12 +796,13 @@ class TextDrillRunner:
 
             if done and not newTerm == None:
                 print("Saving new card...")
-                print(" (not yet implemented) ")
 
+                # TODO: category should be resolved!
+                
                 # TODO: sanity check newTerm - non-empty
                 # Q/A, valid category and tags, etc.
 
-                self.controller.database.insertTerms([newTerm])
+                self.controller.addNewTerms([newTerm])
 
                 # TODO: reload deck?
 
@@ -709,8 +827,8 @@ class TextDrillRunner:
         print(
             "# category=NAME which will set the category to NAME for subsequent terms."
         )
-        filePath = input("Enter file path: ")
-        if filePath.strip().lower() == "x":
+        filePath = input("Enter file path: ").strip()
+        if filePath.lower() == "x":
             self.inputMode = INPUT_MODE_mainmenu
             return
 
@@ -721,7 +839,7 @@ class TextDrillRunner:
 
     def do_file_import(self, filePath):
         if not (os.path.isfile(filePath)):
-            print(f"ERROR: {filePath} is not a valid file path.")
+            print(f"ERROR: \"{filePath}\" is not a valid file path.")
             return False
 
         categories = self.controller.getCategoryList()

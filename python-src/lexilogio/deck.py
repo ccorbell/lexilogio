@@ -50,13 +50,26 @@ class Deck:
     def getSpacedBinDistribution(self):
         return self.prefs[Deck.PREFSKEY_SPACED_BIN_DISTRIBUTION]
 
+    def removeTerm(self, term):
+        if term in self.terms:
+            self.terms.remove(term)
+        
     # utilities for filtering terms
 
     def getAllTerms(self):
         return self.terms
+    
 
     def getTermsInCategory(self, category: Category):
         return [t for t in self.terms if t.category == category.pkey]
+    
+    def getTermByPKey(self, pkey):
+        #print(f"DEBUG - checking {len(self.terms)} terms for pkey {pkey}...")
+        for t in self.terms:
+            #print(f"  {str(t)}")
+            if t.pkey == pkey:
+                return t
+        return None
 
     def getTermsInCategoryOfBinValue(
         self, category: Category, binValue, reversedBin
@@ -107,6 +120,13 @@ class Deck:
 
     def getTermsOfReversedBinValue(self, binValue):
         return [t for t in self.terms if t.reversedBin == binValue]
+    
+    def getTagsForTerm(self, term):
+        tags = []
+        if term.pkey in self.termToTags:
+            tagPKs = self.termToTags[term.pkey]
+            tags = [tg for tg in self.tags if tg.pkey in tagPKs]
+        return tags
 
     def getCategoryByName(self, catName):
         for cat in self.categories:

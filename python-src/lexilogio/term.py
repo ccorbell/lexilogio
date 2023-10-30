@@ -21,3 +21,6 @@ class Term:
 
     def questionSort(term):
         return term.question
+    
+    def __repr__(self):
+        return f"[{self.pkey}] {self.question}: {self.answer}"

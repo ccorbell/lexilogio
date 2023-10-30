@@ -79,16 +79,26 @@ class Controller:
     def reloadDeck(self):
         self.deck = self.database.loadDeck(self.deckName)
 
+    def get_stats(self):
+        return self.database.readDeckStats()
+    
     def getCategoryList(self):
         return self.deck.categories
     
     def getCategoryByName(self, categoryName):
         return self.deck.getCategoryByName(categoryName)
 
+    def getCategoryByPkey(self, catPK):
+        return self.deck.getCategoryByPK(catPK)
+    
     def addNewCategory(self, categoryName):
         newCat = self.database.insertDeckCategory(self.deck, categoryName)
         self.deck.categories.append(newCat)
         return newCat
+    
+    def setCategoryForTerm(self, category, term):
+        self.database.udpateTermCategory(term.pkey, category.pkey)
+        term.category = category.pkey
 
     def deleteCategory(self, category: Category):
         self.database.deleteDeckCategory(self.deck, category)
@@ -116,6 +126,17 @@ class Controller:
                 return
 
         self.database.applyTagToTerm(self.deck, term, tag)
+        
+    def removeTagFromTerm(self, tag:Tag, term:Term):
+        if term.pkey in self.deck.termToTags:
+            curTagPKs = self.deck.termToTags[term.pkey]
+            if tag.pkey in curTagPKs:
+                curTagPKs.remove(tag.pkey)
+                
+        self.database.removeTagFromTerm(self.deck, tag, term)
+        
+    def getTagsForTerm(self, term:Term):
+        return self.deck.getTagsForTerm(term)
 
     def deleteTag(self, tag: Tag):
         self.database.deleteDeckTag(self.deck, tag)
@@ -123,8 +144,18 @@ class Controller:
     def addNewTerms(self, newTermList):
         self.database.insertTerms(self.deck, newTermList)
         
+    def updateTerms(self, termList):
+        self.database.updateTerms(self.deck, termList)
+        
+    def deleteTerm(self, term):
+        self.database.deleteTerm(term)
+        self.deck.removeTerm(term)
+        
     def query(self, queryCriteriaList):
         return self.database.queryByCriteria(self.deck, queryCriteriaList)
+    
+    def getTerm(self, termID):
+        return self.deck.getTermByPKey(termID)
 
     # -------------------------------------- Deck Preferences
     def reloadPrefs(self):
