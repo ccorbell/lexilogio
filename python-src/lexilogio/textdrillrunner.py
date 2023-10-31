@@ -418,6 +418,8 @@ class TextDrillRunner:
             print("   t - add tag")
             print("   q - add question")
             print("   a - add answer")
+            print("   b - add bin value")
+            print("   r - add reverse bin value")
             print("   0 - reset query")
             print("   x - exit (cancel query)")
             print(" Or hit return to run query")
@@ -456,6 +458,22 @@ class TextDrillRunner:
             
             elif choice == "a":
                 answerText = input("Enter answer text; use * for wildcard, x to cancel: ").strip()
+                if len(answerText) > 0:
+                    if answerText == 'x':
+                        continue
+                    
+                    query.append( QueryCriterion.answer(answerText) )
+                    
+            elif choice == "b":
+                answerText = input("Enter bin value (0-5), x to cancel: ").strip()
+                if len(answerText) > 0:
+                    if answerText == 'x':
+                        continue
+                    
+                    query.append( QueryCriterion.binvalue(answerText) )
+                    
+            elif choice == "r":
+                answerText = input("Enter reverse-bin value (0-5), x to cancel: ").strip()
                 if len(answerText) > 0:
                     if answerText == 'x':
                         continue
@@ -584,7 +602,7 @@ class TextDrillRunner:
         
     def delete_for_manage_terms(self, term):
         print("Are you sure you want to delete this term? This cannot be undone.")
-        confirm = input("Enter 'delete' to confirm deletion: ").strip().lowercase()
+        confirm = input("Enter 'delete' to confirm deletion: ").strip().lower()
         if confirm == "delete":
             self.controller.deleteTerm(term)
             print("Term deleted.")

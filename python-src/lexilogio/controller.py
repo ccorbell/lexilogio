@@ -148,7 +148,7 @@ class Controller:
         self.database.updateTerms(self.deck, termList)
         
     def deleteTerm(self, term):
-        self.database.deleteTerm(term)
+        self.database.deleteTerm(self.deck, term)
         self.deck.removeTerm(term)
         
     def query(self, queryCriteriaList):

@@ -43,8 +43,10 @@ class QueryCriterion:
     TAG = "tag:"
     QUESTION = "question:"
     ANSWER = "answer:"
+    BIN = "bin:"
+    REVERSEBIN = "revbin:"
     
-    CRITERION_TYPES = [CATEGORY, TAG, QUESTION, ANSWER]
+    CRITERION_TYPES = [CATEGORY, TAG, QUESTION, ANSWER, BIN, REVERSEBIN]
     
     def __init__(self, criterionType, value):
         if not criterionType in QueryCriterion.CRITERION_TYPES:
@@ -69,6 +71,11 @@ class QueryCriterion:
     def answer(value):
         return QueryCriterion(QueryCriterion.ANSWER, value)
     
+    def binvalue(value):
+        return QueryCriterion(QueryCriterion.BIN, value)
+    
+    def reversebinvalue(value):
+        return QueryCriterion(QueryCriterion.REVERSEBIN, value)
 
 
 class DeckDatabase:
@@ -240,6 +247,8 @@ class DeckDatabase:
             catCriteria = list(filter(lambda cr: cr.criterionType == QueryCriterion.CATEGORY, queryCriteriaList))
             questionCriteria = list(filter(lambda cr: cr.criterionType == QueryCriterion.QUESTION, queryCriteriaList))
             answerCriteria = list(filter(lambda cr: cr.criterionType == QueryCriterion.ANSWER, queryCriteriaList))
+            binCriteria = list(filter(lambda cr: cr.criterionType == QueryCriterion.BIN, queryCriteriaList))
+            reverseBinCriteria = list(filter(lambda cr: cr.criterionType == QueryCriterion.REVERSEBIN, queryCriteriaList))
             
             numWhereCriteria = len(catCriteria) + len(questionCriteria) + len(answerCriteria)
             
@@ -252,12 +261,13 @@ class DeckDatabase:
                 whereClauses.append("category = ?")
                 params.append(catCriteria[0].value.pkey)
             elif len(catCriteria) > 1:
-                catClause = ""
+                catClause = "("
                 for n in range(0, len(catCriteria)):
                     catClause += "category = ?"
                     params.append(catCriteria[n].value.pkey)
                     if n + 1 < len(catCriteria):
                         catClause += " OR "
+                catClause += ")"
                 whereClauses.append(catClause)
                 
             if len(questionCriteria) == 1:
@@ -265,12 +275,13 @@ class DeckDatabase:
             
                 params.append(questionCriteria[0].value.replace('*', '%'))
             elif len(questionCriteria) > 1:
-                questionClause = ""
+                questionClause = "("
                 for n in range(0, len(questionCriteria)):
                     questionClause += "question LIKE ?"
                     params.append(questionCriteria[n].value.replace('*', '%'))
                     if n + 1 < len(questionCriteria):
                         questionClause += " OR "
+                questionClause += ")"
                 whereClauses.append(questionClause)
                 
             if len(answerCriteria) == 1:
@@ -278,13 +289,41 @@ class DeckDatabase:
             
                 params.append(answerCriteria[0].value.replace('*', '%'))
             elif len(answerCriteria) > 1:
-                answerClause = ""
+                answerClause = "("
                 for n in range(0, len(answerClause)):
                     answerClause += "answer LIKE ?"
                     params.append(answerCriteria[n].value.replace('*', '%'))
                     if n + 1 < len(answerCriteria):
                         answerClause += " OR "
+                answerClause += ")"
                 whereClauses.append(answerClause)
+                
+            if len(binCriteria) == 1:
+                whereClauses.append("bin = ?")
+                params.append(int(binCriteria[0].value))
+            elif len(binCriteria) > 1:
+                binClause = "("
+                for n in range(0, len(binCriteria)):
+                    binClause += "bin = ?"
+                    params.append(int(binCriteria[n].value))
+                    if n + 1 < len(binCriteria):
+                        binClause += " OR "
+                binClause += ")"
+                whereClauses.append(binClause)
+                
+            if len(reverseBinCriteria) == 1:
+                whereClauses.append("reversed_bin = ?")
+                params.append(int(reverseBinCriteria[0].value))
+            elif len(reverseBinCriteria) > 1:
+                revbinClause = "("
+                for n in range(0, len(reverseBinCriteria)):
+                    revbinClause += "reversed_bin = ?"
+                    params.append(int(reverseBinCriteria[n].value))
+                    if n + 1 < len(reverseBinCriteria):
+                        revbinClause += " OR "
+                revbinClause += ")"
+                whereClauses.append(revbinClause)
+            
                 
             print(f"DEBUG: whereClauses: {whereClauses}")
             # TODO: tags - as JOIN clause, or just post-process filtering step?
