@@ -122,7 +122,7 @@ class Controller:
         if term.pkey in self.deck.termToTags:
             curTagPKs = self.deck.termToTags[term.pkey]
             if tag.pkey in curTagPKs:   
-                logging.warning("Tag {tag.name} already applied to term, skipping.")
+                logging.warning(f"Tag {tag.name} already applied to term, skipping.")
                 return
 
         self.database.applyTagToTerm(self.deck, term, tag)
@@ -214,7 +214,10 @@ class Controller:
             self.database.updateTermBins(
                 self.deck, updatedTerms, self.deck.isReversedDrill()
             )
-
+            
+    def getMissedDrillTerms(self):
+        return self.drill.getMissedTerms(self.deck.isReversedDrill())
+        
     # -------------------------------------- Import and Export
     def exportTermsToPath(self, filePath, category: Category = None):
         self.reloadDeck()

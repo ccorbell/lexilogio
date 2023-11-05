@@ -250,7 +250,7 @@ class DeckDatabase:
             binCriteria = list(filter(lambda cr: cr.criterionType == QueryCriterion.BIN, queryCriteriaList))
             reverseBinCriteria = list(filter(lambda cr: cr.criterionType == QueryCriterion.REVERSEBIN, queryCriteriaList))
             
-            numWhereCriteria = len(catCriteria) + len(questionCriteria) + len(answerCriteria)
+            numWhereCriteria = len(catCriteria) + len(questionCriteria) + len(answerCriteria) + len(binCriteria) + len(reverseBinCriteria)
             
             tagCriteria = list(filter(lambda cr: cr.criterionType == QueryCriterion.TAG, queryCriteriaList))
 

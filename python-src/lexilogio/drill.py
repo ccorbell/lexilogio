@@ -50,6 +50,11 @@ class Drill:
 
     def getUpdatedTerms(self):
         return [t for t in self.terms if t.updated]
+    
+    def getMissedTerms(self, reversedBin=False):
+        if reversedBin:
+            return [t for t in self.terms if t.reversedBin <= 2]
+        return [t for t in self.terms if t.bin <= 2]
 
     # Drill construction methods
     def makeDrillFromDeck(deck: Deck, category: Category = None, tag: Tag = None):

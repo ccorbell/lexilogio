@@ -163,7 +163,7 @@ class TextDrillRunner:
                 earlyExit = True
         elif typeChoice == 't':
             # show a tag picker
-            drillTag = self.runTagPicker()
+            drillTag = self.runTagPicker(permit_new_tag=False)
             if type(drillTag) == int and drillTag == -1:
                 earlyExit = True
         elif typeChoice == 'x':
@@ -232,7 +232,7 @@ class TextDrillRunner:
 
         return chosenCategory
 
-    def runTagPicker(self, prompt="Tags:"):
+    def runTagPicker(self, prompt="Tags:", permit_new_tag=True):
         """
         Prompt for user selection of a tag. If wildcard or empty
         selection is made, return None. If 'x' is entered to exit,
@@ -242,7 +242,8 @@ class TextDrillRunner:
 
         tagPickerText = f"{prompt}\n"
         tags = self.controller.getTagsList()
-
+        tag_names = [tag.name for tag in tags]
+        
         tagPickerD = {}
         n = 0
         for tagObj in tags:
@@ -250,7 +251,10 @@ class TextDrillRunner:
             tagPickerD[alphaKey] = tagObj
             tagPickerText += f"  ({alphaKey}) {tagObj.name}\n"
             n = n + 1
-
+            
+        if permit_new_tag:
+            tagPickerText += "  (+) new tag\n"
+        
         while None == chosenTag:
             print(tagPickerText)
             chosenKey = (
@@ -259,6 +263,18 @@ class TextDrillRunner:
             if chosenKey == "x":
                 chosenTag = -1
                 break
+            elif chosenKey == "+":
+                new_tag_name = input("Enter new tag name: ").strip().lower()
+                if len(new_tag_name) == 0:
+                    continue
+                
+                if new_tag_name in tag_names:
+                    print(f"Tag {tag_name} already exists.")
+                    continue
+                
+                new_tag = self.controller.addTag(new_tag_name)
+                return new_tag
+                
             elif not chosenKey in tagPickerD:
                 print(f"Invalid choice '{chosenKey}'")
                 chosenKey = None
@@ -380,9 +396,27 @@ class TextDrillRunner:
 
     def end_drill(self):
         print("Exiting drill...")
+        missed_terms = self.controller.getMissedDrillTerms()
+        numMissed = len(missed_terms)
+        if numMissed > 0:
+            # prompt to tag missed terms
+            suffix = "s"
+            if numMissed == 1:
+                suffix = ""
+            prompt = f"{numMissed} term{suffix} scored 2 or less; would you like to tag them? (y/n) "
+            yn = input(prompt).strip().lower()
+            if yn.startswith('y'):
+                self.tag_missed_terms(missed_terms)
+                
         self.controller.saveUpdatedDrillTerms()
         self.inputMode = INPUT_MODE_mainmenu
 
+    def tag_missed_terms(self, missed_terms):
+        tag = self.runTagPicker(permit_new_tag=True)
+        if tag is not None and tag != -1:
+            for term in missed_terms:
+                self.controller.applyTagToTerm(tag, term)
+        
     def run_manage_terms(self):
         print("============")
         print("Manage terms")
@@ -465,20 +499,20 @@ class TextDrillRunner:
                     query.append( QueryCriterion.answer(answerText) )
                     
             elif choice == "b":
-                answerText = input("Enter bin value (0-5), x to cancel: ").strip()
-                if len(answerText) > 0:
-                    if answerText == 'x':
+                binText = input("Enter bin value (0-5), x to cancel: ").strip()
+                if len(binText) > 0:
+                    if binText == 'x':
                         continue
                     
-                    query.append( QueryCriterion.binvalue(answerText) )
+                    query.append( QueryCriterion.binvalue(binText) )
                     
             elif choice == "r":
-                answerText = input("Enter reverse-bin value (0-5), x to cancel: ").strip()
-                if len(answerText) > 0:
-                    if answerText == 'x':
+                rbinText = input("Enter reverse-bin value (0-5), x to cancel: ").strip()
+                if len(rbinText) > 0:
+                    if rbinText == 'x':
                         continue
                     
-                    query.append( QueryCriterion.answer(answerText) )
+                    query.append( QueryCriterion.reversebinvalue(rbinText) )
                     
             elif choice == '0':
                 query = []
