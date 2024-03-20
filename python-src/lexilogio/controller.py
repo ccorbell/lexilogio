@@ -97,7 +97,7 @@ class Controller:
         return newCat
     
     def setCategoryForTerm(self, category, term):
-        self.database.udpateTermCategory(term.pkey, category.pkey)
+        self.database.udpateTermCategory(self.deck, catpk=category.pkey, termpk=term.pkey)
         term.category = category.pkey
 
     def deleteCategory(self, category: Category):
@@ -135,6 +135,9 @@ class Controller:
                 
         self.database.removeTagFromTerm(self.deck, tag, term)
         
+    def clearTagFromTerms(self, tag:Tag):
+        self.database.clearTagFromAllTerms(self.deck, tag)
+        
     def getTagsForTerm(self, term:Term):
         return self.deck.getTagsForTerm(term)
 
@@ -156,6 +159,9 @@ class Controller:
     
     def getTerm(self, termID):
         return self.deck.getTermByPKey(termID)
+    
+    def getRandomTerms(self, count):
+        return self.deck.getRandomTerms(count)
 
     # -------------------------------------- Deck Preferences
     def reloadPrefs(self):
@@ -178,7 +184,7 @@ class Controller:
     def getPref_isUsingSpacedRepetition(self):
         return self.deck.isUsingSpacedRepetition()
 
-    def getPref_setUsingSpacedRepetition(self, use_spaced_rep: bool):
+    def setPref_isUsingSpacedRepetition(self, use_spaced_rep: bool):
         self.deck.prefs[Deck.PREFSKEY_SPACED_REPETITION] = use_spaced_rep
         self.database.writeDeckPreferences(self.deck)
 

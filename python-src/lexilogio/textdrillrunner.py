@@ -47,6 +47,8 @@ INPUT_MODE_tags = 40
 
 INPUT_MODE_manageTerms = 50
 
+INPUT_MODE_randomWords = 60
+
 INPUT_MODE_preferences = 99
 
 INPUT_MODE_batchcmd = 9999
@@ -111,7 +113,8 @@ class TextDrillRunner:
         print("commands:")
         print("  (d) drill         (p) preferences    (a) add card")
         print("  (i) import cards  (e) export cards   (m) manage cards")
-        print("  (c) categories    (t) tags           (x) exit")
+        print("  (c) categories    (t) tags           (r) random-words")
+        print("  (L) reload database            (x) exit")
 
         choice = input(": ").strip().lower()
         if choice == "d":
@@ -142,6 +145,13 @@ class TextDrillRunner:
             self.inputMode = INPUT_MODE_manageTerms
             self.run_manage_terms()
             self.inputMode = INPUT_MODE_mainmenu
+        elif choice == "r":
+            self.inputMode = INPUT_MODE_randomWords
+            self.run_random_words()
+            self.inputMode = INPUT_MODE_mainmenu
+        elif choice == "l":
+            self.controller.reloadDeck()
+            print("Deck reloaded.")
         elif choice == "x":
             sys.exit(0)
         else:
@@ -183,7 +193,8 @@ class TextDrillRunner:
             self.inputMode = INPUT_MODE_mainmenu
             return
 
-        print("\nStarting drill. Hit return to show answer for each question,")
+        print(f"\nStarting drill with {len(self.drill.terms)} terms.")
+        print("Hit return to show answer for each question,")
         print(
             "then rate your knowledge of the answer on a scale of 1-5, where"
         )
@@ -194,7 +205,7 @@ class TextDrillRunner:
 
         self.inputMode = INPUT_MODE_question
 
-    def runCategoryPicker(self, prompt="Categories:"):
+    def runCategoryPicker(self, prompt="Categories:", allow_wildcard=False):
         """
         Prompt for user selection of a category. If wildcard or empty
         selection is made, return None. If 'x' is entered to exit,
@@ -202,7 +213,11 @@ class TextDrillRunner:
         """
         chosenCategory = None
 
-        categoryPickerText = f"{prompt}\n  (*) (all categories)\n"
+        categoryPickerText = f"{prompt}\n"
+        
+        if allow_wildcard:
+            categoryPickerText += "  (*) (all categories)\n"
+            
         categories = self.controller.getCategoryList()
 
         catPickerD = {}
@@ -223,7 +238,8 @@ class TextDrillRunner:
                 break
             elif chosenKey == "*" or len(chosenKey) == 0:
                 chosenCategory = None
-                break
+                if allow_wildcard:
+                    break
             elif not chosenKey in catPickerD:
                 print(f"Invalid choice '{chosenKey}'")
                 chosenKey = None
@@ -232,7 +248,7 @@ class TextDrillRunner:
 
         return chosenCategory
 
-    def runTagPicker(self, prompt="Tags:", permit_new_tag=True):
+    def runTagPicker(self, prompt="Tags:", permit_new_tag=True, allow_none=False):
         """
         Prompt for user selection of a tag. If wildcard or empty
         selection is made, return None. If 'x' is entered to exit,
@@ -260,6 +276,12 @@ class TextDrillRunner:
             chosenKey = (
                 input("Enter letter for tag, x to exit: ").strip().lower()
             )
+            if len(chosenKey) == 0:
+                if allow_none:
+                    return None
+                else:
+                    print("Empty entry not allowed; enter x to cancel.")
+                    continue
             if chosenKey == "x":
                 chosenTag = -1
                 break
@@ -269,7 +291,7 @@ class TextDrillRunner:
                     continue
                 
                 if new_tag_name in tag_names:
-                    print(f"Tag {tag_name} already exists.")
+                    print(f"Tag {new_tag_name} already exists.")
                     continue
                 
                 new_tag = self.controller.addTag(new_tag_name)
@@ -442,6 +464,27 @@ class TextDrillRunner:
                 print("DEBUG - exiting term manager...")
                 return
         
+    def run_random_words(self):
+        print("===================")
+        print("select random words")
+        print("===================")
+        
+        exit_random_words = False
+        
+        while not exit_random_words:
+            user_input = input("enter number of words (x to exit): ").strip().lower()
+            if user_input == 'x':
+                exit_random_words = True
+                return
+            if user_input.isnumeric():
+                num_terms = int(user_input)
+                if num_terms > 0:
+                    terms = self.controller.getRandomTerms(num_terms)
+                    for term in terms:
+                        print(str(term))
+            
+                
+                
         
     def query_for_manage_terms(self):
         query = []
@@ -644,7 +687,7 @@ class TextDrillRunner:
             print("Deletion cancelled.")
         
     def run_export(self):
-        category = self.runCategoryPicker("Select category to export:")
+        category = self.runCategoryPicker("Select category to export:", allow_wildcard=True)
         if type(category) == int and category == -1:
             # cancel export
             self.inputMode = INPUT_MODE_mainmenu
@@ -739,7 +782,7 @@ class TextDrillRunner:
                     .lower()
                 )
                 if yn.startswith("y"):
-                    self.controller.setPref_setUsingSpacedRepetition(
+                    self.controller.setPref_isUsingSpacedRepetition(
                         toggleSpaceRep
                     )
 
@@ -814,27 +857,36 @@ class TextDrillRunner:
             else:
                 newTerm.answer = answer.strip()
 
-            # TODO: runCategoryPicker
-            category = input("category: ")
-            if category.strip().lower() == "x":
-                cancelled = True
+            category = None
+            while category is None:
+                category = self.runCategoryPicker()
+                if category == -1:
+                    cancelled = True
+                    break
+            
+            if cancelled:
                 break
             
-            catName = category.strip()
-            if not catName in catLookup:
-                print("ERROR - unknown category: {catName}")
-                cancelled = True
-                break
-            else:
-                newTerm.category = catLookup[catName]
+            newTerm.category = category
+            
 
+            tags = []
+            doneTagging = False
+            while not doneTagging:
+                nextTag = self.runTagPicker("Apply a tag (empty return to end tagging):",
+                                            permit_new_tag=True,
+                                            allow_none=True)
+                if nextTag is None:
+                    break
+                if nextTag == -1:
+                    cancelled = True
+                    break
+                tags.append(nextTag)
 
-            # TODO: runTagPicker
-            tags = input("tags (comma-separated, no spaces): ")
-            if tags.strip().lower() == "x":
-                cancelled = True
+            if cancelled:
                 break
-            newTerm.tags = tags.strip().split(",")
+            
+            newTerm.tags = tags
 
             print("Adding card: ")
             print(f" question: {newTerm.question}")
@@ -849,8 +901,6 @@ class TextDrillRunner:
             if done and not newTerm == None:
                 print("Saving new card...")
 
-                # TODO: category should be resolved!
-                
                 # TODO: sanity check newTerm - non-empty
                 # Q/A, valid category and tags, etc.
 
@@ -994,7 +1044,7 @@ class TextDrillRunner:
                 for curTag in currentTags:
                     print(f"  {curTag.name}")
 
-            print("\ncommands: add (tag-name), delete (tag-name), x (exit)")
+            print("\ncommands: add (tag-name), delete (tag-name), clear (tag-name), x (exit)")
             commandInput = input(": ")
 
             commandParts = commandInput.lower().split(" ")
@@ -1034,6 +1084,25 @@ class TextDrillRunner:
                     else:
                         print(f'Deleting tag "{delTagObj.name}"...')
                         self.controller.deleteTag(delTagObj)
+            elif command == "clear":
+                if len(commandParts) < 2:
+                    print(
+                        "ERROR: add command should be followed by new tag name."
+                    )
+                else:
+                    tagName = commandParts[1].strip()
+                    clearTagObj = None
+                    for tagObj in currentTags:
+                        if tagObj.name.lower() == tagName.lower():
+                            clearTagObj = tagObj
+
+                    if None == clearTagObj:
+                        print(
+                            f'WARNING: tag "{tagName}" not found, nothing to clear.'
+                        )
+                    else:
+                        print(f'Clearing terms from tag "{tagName}"...')
+                        self.controller.clearTagFromTerms(clearTagObj)
 
         # note, we don't currently change input mode here in case
         # we are editing tags in the midst of a drill

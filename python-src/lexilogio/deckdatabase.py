@@ -122,16 +122,24 @@ class DeckDatabase:
         
         cur.execute(COUNT_SQL, [])
         count_result = cur.fetchone()
+        if count_result is not None and len(count_result) > 0:
+            count = int(count_result[0])
+        else:
+            count = 0
         
         cur.execute(BIN_AVG_SQL, [])
         bin_avg_result = cur.fetchone()
+        if bin_avg_result[0] is not None:
+            bin_avg = float(bin_avg_result[0])
+        else:
+            bin_avg = 0
         
         cur.execute(RBIN_AVG_SQL, [])
         rbin_avg_result = cur.fetchone()
-        
-        count = int(count_result[0])
-        bin_avg = float(bin_avg_result[0])
-        rbin_avg = float(rbin_avg_result[0])
+        if rbin_avg_result[0] is not None:
+            rbin_avg = float(rbin_avg_result[0])
+        else:
+            rbin_avg = 0
         
         result_d = {
             "count": count,
@@ -404,20 +412,33 @@ class DeckDatabase:
         insertSQL = f"""INSERT INTO {DECK_TERMS_TABLE_NAME} (question, answer, category, bin, reversed_bin) 
     VALUES (?, ?, ?, ?, ?);
 """
+        
+        tagRelateSQL = f"""INSERT INTO {TAG_RELATION_TABLE_NAME} (term, tag) VALUES (?, ?);"""
 
         con = self.getDbConnection()
         cur = con.cursor()
+        
 
         for term in termList:
+            category_pkey = term.category
+            if type(term.category) is Category:
+                category_pkey = term.category.pkey
+                
             termParams = [
                 (term.question),
                 (term.answer),
-                (term.category),
+                (category_pkey),
                 (term.bin),
                 (term.reversedBin),
             ]
 
             cur.execute(insertSQL, termParams)
+            
+            term.pkey = cur.lastrowid
+            if term.tags is not None:
+                for tag in term.tags:
+                    term_tag_params = [term.pkey, tag.pkey]
+                    cur.execute(tagRelateSQL, term_tag_params)
 
         con.commit()
 
@@ -457,7 +478,7 @@ WHERE pkey = ?;
     def udpateTermCategory(self, deck: Deck, catpk, termpk):
         con = self.getDbConnection()
         cur = con.cursor()
-        updateSQL = f"UPDATE {DECK_TERMS_TABLE_NAME} SET category = ? WHERE pkay = ?;"
+        updateSQL = f"UPDATE {DECK_TERMS_TABLE_NAME} SET category = ? WHERE pkey = ?;"
         params = [(catpk), (termpk),]
         cur.execute(updateSQL, params)
         con.commit()
@@ -667,6 +688,15 @@ SET reversed_bin = ?, last_drill_time = ? WHERE pkey = ?;"""
         cur = con.cursor()
 
         cur.execute(deleteSQL, params)
+        con.commit()
+        
+    def clearTagFromAllTerms(self, deck: Deck, tag: Tag):
+        clearSQL = f"DELETE FROM {TAG_RELATION_TABLE_NAME} WHERE (tag=?);"
+        params = [(tag.pkey),]
+        con = self.getDbConnection()
+        cur = con.cursor()
+
+        cur.execute(clearSQL, params)
         con.commit()
         
     def insertDeckTag(self, deck: Deck, tag_name):

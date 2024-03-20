@@ -222,7 +222,7 @@ class Drill:
             elif usingTag:
                 sourceTerms = deck.getTermsWithTag(tag)
             else:
-                sourceTerms.deck.terms
+                sourceTerms = deck.terms
 
             if len(sourceTerms) == 0:
                 print('No terms !')
@@ -243,4 +243,6 @@ class Drill:
             else:
                 drill.terms.extend(sourceTerms)
 
+            random.shuffle(drill.terms)
+            
         return drill

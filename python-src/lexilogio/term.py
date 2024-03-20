@@ -18,6 +18,7 @@ class Term:
         self.lastDrillTime = None
         self.updated = False
         self.hasPaperCard = False
+        self.tags = None
 
     def questionSort(term):
         return term.question

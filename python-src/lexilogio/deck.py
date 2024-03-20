@@ -8,6 +8,7 @@ Created on Sat Apr  8 23:55:23 2023
 
 from lexilogio.category import Category
 from lexilogio.tag import Tag
+import random
 
 class Deck:
     PREFSKEY_QUESTION_COUNT = "question.count"
@@ -59,6 +60,21 @@ class Deck:
     def getAllTerms(self):
         return self.terms
     
+    def getRandomTerms(self, count):
+        if count <= 0:
+            return []
+        if count >= len(self.terms):
+            return self.terms
+        
+        result = []
+        term_index_set = set()
+        while len(term_index_set) < count:
+            term_index_set.add(random.randint(0, len(self.terms)))
+        
+        for index in term_index_set:
+            result.append(self.terms[index])
+    
+        return result
 
     def getTermsInCategory(self, category: Category):
         return [t for t in self.terms if t.category == category.pkey]
