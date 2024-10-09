@@ -14,7 +14,7 @@ import logging
 from lexilogio.deck import Deck
 from lexilogio.category import Category
 from lexilogio.tag import Tag
-
+import time
 
 class Drill:
     def __init__(self, terms):
@@ -115,12 +115,9 @@ class Drill:
                     f"  only {termTotal} matching terms available; adjusted questionCount: {questionCount}"
                 )
 
-            # TODO make this distribution a preference the user can edit
             binDist = deck.getSpacedBinDistribution()
 
-            # TODO: when binDist is user-settable, add fix-up here or in Deck
-            # to coerce distribute values to 1.0 sum;, proportionally;
-            # for now the hard-coded value is good...
+
             binCounts = {}
             binSum = 0
             for n in range(0, 6):
@@ -193,9 +190,9 @@ class Drill:
                     f"  bin[{n}]: {binCounts[n]} from {len(binTerms[n])} available."
                 )
 
-            # print("  making random term selections...")
+            logging.info("  making random term selections...")
             # now we are ready to randomly select terms from each bin
-            random.seed()
+            random.seed(int(time.monotonic()*1000))
             drill.terms = []
             for n in range(0, 6):
                 thisBinCount = binCounts[n]
@@ -204,7 +201,7 @@ class Drill:
                     indexSet = set()
                     while len(indexSet) < thisBinCount:
                         indexSet.add(random.randint(0, len(thisBinTerms) - 1))
-                    logging.debug(f"Index set for bin {n}: {str(indexSet)}")
+                    logging.info(f"  index set for bin {n}: {str(indexSet)}")
                     for index in indexSet:
                         drill.terms.append(thisBinTerms[index])
                 else:
@@ -213,7 +210,7 @@ class Drill:
 
             random.shuffle(drill.terms)
 
-            # print(f"  drill completed, {len(drill.terms)} terms chosen.")
+            logging.info(f"  drill completed, {len(drill.terms)} terms chosen.")
 
         else:  # not using spaced rep from bins, just random from all terms
             sourceTerms = []

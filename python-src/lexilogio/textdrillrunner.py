@@ -117,42 +117,42 @@ class TextDrillRunner:
         print("  (L) reload database            (x) exit")
 
         choice = input(": ").strip().lower()
-        if choice == "d":
+        if choice == "d" or choice == 'δ':
             self.inputMode = INPUT_MODE_startDrill
             self.prepare_and_run_drill()
-        elif choice == "i":
+        elif choice == "i" or choice == 'ι':
             self.inputMode = INPUT_MODE_import
             self.run_import()
-        elif choice == "e":
+        elif choice == "e" or choice == 'ε':
             self.inputMode = INPUT_MODE_export
             self.run_export()
-        elif choice == "a":
+        elif choice == "a" or choice == 'α':
             self.inputMode = INPUT_MODE_add
             self.run_add()
-        elif choice == "p":
+        elif choice == "p" or choice == 'π':
             self.inputMode = INPUT_MODE_preferences
             self.run_prefs()  # has its own input loop
             self.inputMode = INPUT_MODE_mainmenu
-        elif choice == "c":
+        elif choice == "c" or choice == 'ψ':
             self.inputMode = INPUT_MODE_categories
             self.run_categories_edit()  # has its own input loop
             self.inputMode = INPUT_MODE_mainmenu
-        elif choice == "t":
+        elif choice == "t" or choice == 'τ':
             self.inputMode = INPUT_MODE_tags
             self.run_tags_edit()  # has its own input loop
             self.inputMode = INPUT_MODE_mainmenu
-        elif choice == "m":
+        elif choice == "m" or choice == 'μ':
             self.inputMode = INPUT_MODE_manageTerms
             self.run_manage_terms()
             self.inputMode = INPUT_MODE_mainmenu
-        elif choice == "r":
+        elif choice == "r" or choice == 'ρ':
             self.inputMode = INPUT_MODE_randomWords
             self.run_random_words()
             self.inputMode = INPUT_MODE_mainmenu
-        elif choice == "l":
+        elif choice == "l" or choice == 'λ':
             self.controller.reloadDeck()
             print("Deck reloaded.")
-        elif choice == "x":
+        elif choice == "x" or choice == 'χ':
             sys.exit(0)
         else:
             print(f"Option '{choice}' not recognized.")
@@ -166,17 +166,17 @@ class TextDrillRunner:
         
         typeChoice = input("Enter drill type: (c) category, (t) tag, (a or return) all terms: ").strip().lower()
         
-        if typeChoice == 'c':
+        if typeChoice == 'c' or typeChoice == 'ψ':
             # show a category picker
             drillCategory = self.runCategoryPicker()
             if type(drillCategory) == int and drillCategory == -1:
                 earlyExit = True
-        elif typeChoice == 't':
+        elif typeChoice == 't' or typeChoice == 'τ':
             # show a tag picker
             drillTag = self.runTagPicker(permit_new_tag=False)
             if type(drillTag) == int and drillTag == -1:
                 earlyExit = True
-        elif typeChoice == 'x':
+        elif typeChoice == 'x' or typeChoice == 'χ':
             earlyExit = True
             
         if earlyExit:
@@ -282,7 +282,7 @@ class TextDrillRunner:
                 else:
                     print("Empty entry not allowed; enter x to cancel.")
                     continue
-            if chosenKey == "x":
+            if chosenKey == "x" or chosenKey == 'χ':
                 chosenTag = -1
                 break
             elif chosenKey == "+":
@@ -349,7 +349,7 @@ class TextDrillRunner:
                                 f" - added tag {newTagName}, applying to term."
                             )
                             self.controller.applyTagToTerm(chosenTag, term)
-                elif chosenKey == "x":
+                elif chosenKey == "x" or chosenKey == 'χ':
                     return
                 else:
                     print("Unrecognized choice '{chosenKey}'")
@@ -370,10 +370,10 @@ class TextDrillRunner:
 
         ret = input(f"\n\t{flashQuestion}\n").strip().lower()
 
-        if ret == "x":
+        if ret == "x" or ret == "χ":
             self.end_drill()
             return
-        elif ret == "t":
+        elif ret == "t" or ret == "τ":
             self.run_apply_tag_to_term()
 
         self.inputMode = INPUT_MODE_response
@@ -388,10 +388,10 @@ class TextDrillRunner:
         rating = 0
         while not rating >= 1 and rating < 5:
             rating = input(f"\t{flashAnswer}\n[1-5]: ").strip().lower()
-            if rating == "x":
+            if rating == "x" or rating == "χ":
                 self.end_drill()
                 return
-            if rating == "t":
+            if rating == "t" or rating == "τ":
                 self.run_apply_tag_to_term()
                 rating = 0
                 continue
@@ -427,7 +427,7 @@ class TextDrillRunner:
                 suffix = ""
             prompt = f"{numMissed} term{suffix} scored 2 or less; would you like to tag them? (y/n) "
             yn = input(prompt).strip().lower()
-            if yn.startswith('y'):
+            if yn.startswith('y') or yn.startswith('υ'):
                 self.tag_missed_terms(missed_terms)
                 
         self.controller.saveUpdatedDrillTerms()
@@ -455,11 +455,11 @@ class TextDrillRunner:
             print("   x - exit term manager")
             choice = input(" > ").strip().lower()
             
-            if choice == 'q':
+            if choice == 'q' or choice == ";":
                 self.query_for_manage_terms()
-            elif choice == 'e':
+            elif choice == 'e' or choice == "ε":
                 self.manage_terms_editor()
-            elif choice == 'x':
+            elif choice == 'x' or choice == "χ":
                 exit_manage_terms = True
                 print("DEBUG - exiting term manager...")
                 return
@@ -473,7 +473,7 @@ class TextDrillRunner:
         
         while not exit_random_words:
             user_input = input("enter number of words (x to exit): ").strip().lower()
-            if user_input == 'x':
+            if user_input == 'x' or user_input == "χ":
                 exit_random_words = True
                 return
             if user_input.isnumeric():
@@ -505,7 +505,7 @@ class TextDrillRunner:
             if choice == "":
                 break
             
-            if choice == 'c':
+            if choice == 'c' or choice == 'ψ':
                 cat = self.runCategoryPicker("Choose category:")
                 if None == cat:
                     continue
@@ -514,7 +514,7 @@ class TextDrillRunner:
                 else:
                     query.append( QueryCriterion.category(cat) )
                     
-            elif choice == 't':
+            elif choice == 't' or choice == 'τ':
                 tag = self.runTagPicker("Choose tag:")
                 if None == tag:
                     print("...no tag selected, ignoring.")
@@ -525,34 +525,34 @@ class TextDrillRunner:
                 else:
                     query.append( QueryCriterion.tag(tag) )
                 
-            elif choice == "q":
+            elif choice == "q" or choice == ';':
                 questionText = input("Enter question text; use * for wildcard, x to cancel: ").strip()
                 if len(questionText) > 0:
-                    if questionText == 'x':
+                    if questionText == 'x' or questionText == 'χ':
                         continue
                     
                     query.append( QueryCriterion.question(questionText) )
             
-            elif choice == "a":
+            elif choice == "a" or choice == 'α':
                 answerText = input("Enter answer text; use * for wildcard, x to cancel: ").strip()
                 if len(answerText) > 0:
-                    if answerText == 'x':
+                    if answerText == 'x' or answerText == 'χ':
                         continue
                     
                     query.append( QueryCriterion.answer(answerText) )
                     
-            elif choice == "b":
+            elif choice == "b" or choice == 'β':
                 binText = input("Enter bin value (0-5), x to cancel: ").strip()
                 if len(binText) > 0:
-                    if binText == 'x':
+                    if binText == 'x' or binText == 'χ':
                         continue
                     
                     query.append( QueryCriterion.binvalue(binText) )
                     
-            elif choice == "r":
+            elif choice == "r" or choice == 'ρ':
                 rbinText = input("Enter reverse-bin value (0-5), x to cancel: ").strip()
                 if len(rbinText) > 0:
-                    if rbinText == 'x':
+                    if rbinText == 'x' or rbinText == 'χ':
                         continue
                     
                     query.append( QueryCriterion.reversebinvalue(rbinText) )
@@ -562,7 +562,7 @@ class TextDrillRunner:
                 print("Query reset.")
                 continue
             
-            elif choice == 'x':
+            elif choice == 'x' or choice == 'χ':
                 building_query = False
                 print("Query canceled.")
                 return
@@ -589,7 +589,7 @@ class TextDrillRunner:
             while term == None:
                 termIdStr = input("Enter ID of card to edit: ").strip()
                 if len(termIdStr) > 0:
-                    if termIdStr == 'x':
+                    if termIdStr == 'x' or termIdStr == 'χ':
                         return
                     
                     try:
@@ -627,23 +627,23 @@ class TextDrillRunner:
                 print ("  (x) exit")
                 choice = input("> ").strip().lower()
                 
-                if choice == 'x':
+                if choice == 'x' or choice == 'χ':
                     term = None
                     exit_term_editor = True
                     break
-                elif choice == 'c':
+                elif choice == 'c' or choice == 'ψ':
                     self.assign_category_for_manage_terms(term)
-                elif choice == 't':
+                elif choice == 't' or choice == 'τ':
                     self.tag_for_manage_terms(term)
                 elif choice == '-':
                     self.tag_for_manage_terms(term, removing=True)
-                elif choice == 'd':
+                elif choice == 'd' or choice == 'δ':
                     self.delete_for_manage_terms(term)
                     term = None
                     break
-                elif choice == 'q' or choice == 'a':
+                elif choice in ['q', 'a', ';', 'α']:
                     modifying = 'question'
-                    if choice == 'a':
+                    if choice == 'a' or choice == 'α':
                         modifying = 'answer'
                     new_value = input(f"Enter new {modifying}\n> ")
                     if len(new_value.strip()) == 0:
@@ -653,12 +653,12 @@ class TextDrillRunner:
                     if not yn.startswith("y"):
                         print("No change applied.")
                         continue
-                    if choice == 'q':
+                    if choice == 'q' or choice == ';':
                         term.question = new_value
                     else:
                         term.answer = new_value
                     self.controller.updateTerms([term])
-                elif choice == 'd':
+                elif choice == 'd' or choice == 'δ':
                     self.delete_for_manage_terms()
     
     def tag_for_manage_terms(self, term, removing=False):
